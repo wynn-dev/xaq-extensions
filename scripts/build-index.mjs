@@ -5,8 +5,11 @@
 //
 //   node scripts/build-index.mjs [--commit <rev>]           print index.json for every extension at <rev> (default HEAD)
 //   node scripts/build-index.mjs [--commit <rev>] --write   write it to index.json
-//   node scripts/build-index.mjs --check                    check index.json: each entry's commit exists, its files
-//                                                           have that integrity, and its fields match the manifest
+//   node scripts/build-index.mjs --check [--base <ref>]     check index.json: each entry's commit exists, its files
+//                                                           have that integrity, and its fields match the manifest;
+//                                                           and every entry new or changed since <ref>'s index.json
+//                                                           (default origin/main) pins a commit already on <ref>
+//                                                           whose files are exactly this tree's
 //
 // Release flow: merge the extension, then `node scripts/build-index.mjs --commit <merged sha> --write` and commit
 // index.json. xaq installs exactly the pinned commit and integrity; an unchanged extension keeps its integrity, so
@@ -87,6 +90,58 @@ export function buildIndex(rev = "HEAD") {
   return { schema: 1, extensions: extensionNames(commit).map((name) => entryAt(commit, name)) };
 }
 
+export function isAncestor(commit, of) {
+  try {
+    git(["merge-base", "--is-ancestor", commit, of], { stdio: "ignore" });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** index.json at `ref`, or an empty index when it has none. */
+export function indexAt(ref) {
+  let text;
+  try {
+    text = git(["show", `${ref}:index.json`], { stdio: ["ignore", "pipe", "ignore"] }).toString("utf8");
+  } catch {
+    return { schema: 1, extensions: [] };
+  }
+  return JSON.parse(text);
+}
+
+/**
+ * What a change to index.json must prove, against the base branch (`base`, e.g. origin/main): every entry that's new
+ * or whose commit or integrity moved pins a commit that is already on the base branch, with exactly the files this
+ * tree has. Otherwise a PR could pin a commit that never reaches main (add bad code in commit A, revert it in B and
+ * point index.json at A: the net diff is a one-line bump) and every xaq would install A as official.
+ */
+export function checkPinsAgainstBase(index, base, head = "HEAD") {
+  const problems = [];
+  const before = new Map((indexAt(base).extensions ?? []).map((e) => [e.name, e]));
+  for (const e of index.extensions ?? []) {
+    const was = before.get(e.name);
+    if (was && was.commit === e.commit && was.integrity === e.integrity) continue;
+    const where = `index.json: ${e.name}`;
+    if (!COMMIT_RE.test(e.commit ?? "")) continue; // reported by checkIndex
+    if (!isAncestor(e.commit, base)) {
+      problems.push(`${where}: the pinned commit ${e.commit.slice(0, 12)} isn't on ${base}. Merge the extension first, then pin the merged commit.`);
+      continue;
+    }
+    let pinned;
+    let current;
+    try {
+      pinned = integrityAt(e.commit, e.name);
+      current = integrityAt(head, e.name);
+    } catch (err) {
+      problems.push(`${where}: ${err.message.split("\n")[0]}`);
+      continue;
+    }
+    if (pinned !== current) problems.push(`${where}: the files at the pinned commit ${e.commit.slice(0, 12)} (${pinned}) aren't the files in this tree (${current}).`);
+  }
+  return problems;
+}
+
 /** Problems with an index (empty when it's right). `head`: also report extensions at that commit the index lacks. */
 export function checkIndex(index, head = null) {
   const problems = [];
@@ -134,7 +189,15 @@ if (import.meta.url === pathToFileURL(resolve(process.argv[1] ?? "")).href) {
   }
   if (args.includes("--check")) {
     const index = JSON.parse(readFileSync("index.json", "utf8"));
-    const problems = checkIndex(index, "HEAD");
+    const b = args.indexOf("--base");
+    const base = b >= 0 ? args[b + 1] : "origin/main";
+    try {
+      resolveCommit(base);
+    } catch {
+      console.error(`✗ the base ${base} isn't available: fetch it first (git fetch origin main).`);
+      process.exit(1);
+    }
+    const problems = [...checkIndex(index, "HEAD"), ...checkPinsAgainstBase(index, base)];
     const missing = problems.filter((p) => p.includes("isn't in index.json yet"));
     const errors = problems.filter((p) => !missing.includes(p));
     for (const p of missing) console.log(`! ${p}`);

@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // Validates every extensions/<name>/: its xaq-extension.json against schema/xaq-extension.schema.json, its name
 // against the directory, and the rules xaq enforces at install (no symlinks, at most 20 MB and 5,000 files; a code
-// extension's entry exists and nothing gets installed: no node_modules, no install scripts). Plain Node, no
+// extension's entry exists and nothing gets installed: no node_modules, no install scripts), and that no
+// .gitattributes uses export-ignore or export-subst (GitHub's tarball would differ from the pinned files). Plain Node, no
 // dependencies: the JSON Schema subset the manifest schema uses is checked below.
 //
 //   node scripts/validate.mjs [extensions/<name>…]      (default: every extension)
@@ -136,6 +137,32 @@ export function checkExtension(dir, schema) {
   return problems;
 }
 
+/**
+ * export-ignore and export-subst make GitHub's tarball differ from the git objects build-index.mjs pins (files left
+ * out, or text substituted at download time), so the installed files wouldn't be the pinned ones: refused in every
+ * .gitattributes.
+ */
+export function forbiddenAttributes(root = ".") {
+  const problems = [];
+  const walk = (dir) => {
+    for (const name of readdirSync(dir)) {
+      if (name === ".git" || name === "node_modules") continue;
+      const abs = join(dir, name);
+      const st = lstatSync(abs);
+      if (st.isDirectory()) walk(abs);
+      else if (name === ".gitattributes") {
+        readFileSync(abs, "utf8")
+          .split("\n")
+          .forEach((line, i) => {
+            if (/(^|\s)[-!]?export-(ignore|subst)\b/.test(line.replace(/#.*/, ""))) problems.push(`${abs}:${i + 1}: export-ignore and export-subst aren't allowed (GitHub's tarball would differ from the pinned files)`);
+          });
+      }
+    }
+  };
+  walk(root);
+  return problems;
+}
+
 export function extensionDirs(root = "extensions") {
   if (!existsSync(root)) return [];
   return readdirSync(root)
@@ -154,6 +181,10 @@ if (import.meta.url === pathToFileURL(resolve(process.argv[1] ?? "")).href) {
       failed++;
       for (const p of problems) console.error(`✗ ${p}`);
     } else console.log(`✓ ${dir}`);
+  }
+  for (const p of forbiddenAttributes(".")) {
+    console.error(`✗ ${p}`);
+    failed++;
   }
   // index.json's shape (its pins are checked by build-index.mjs --check).
   const index = JSON.parse(readFileSync("index.json", "utf8"));

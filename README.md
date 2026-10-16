@@ -19,7 +19,9 @@ Plain Node (22.13 or newer), no dependencies:
   test/fixtures/extension-integrity` checks the test vectors xaq shares.
 - `node scripts/build-index.mjs --commit <sha> --write`: rebuilds `index.json`, pinning every extension to `<sha>`
   and the integrity of its files there (from the git objects, as GitHub's tarball of that commit has them).
-  `--check` verifies each entry against its pinned commit.
+  `--check [--base origin/main]` verifies each entry against its pinned commit, and that every new or moved pin names
+  a commit already on the base branch whose files are exactly this tree's.
 
-To release: merge the extension, run `build-index.mjs --commit <merged sha> --write`, and commit `index.json`. An
-unchanged extension keeps its integrity, so xaq doesn't offer it as an update.
+To release: merge the extension first, then in a second PR run `build-index.mjs --commit <merged sha> --write` and
+commit `index.json` (CI refuses a pin on a commit that isn't on main yet). An unchanged extension keeps its
+integrity, so xaq doesn't offer it as an update. `.gitattributes` may not use `export-ignore` or `export-subst`.

@@ -17,11 +17,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v5
+      # Actions pinned by commit (the tag in the comment): a moved tag can't change what runs here.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          # build-index.mjs --check reads each entry's pinned commit.
+          # build-index.mjs --check reads each entry's pinned commit and the base branch's history.
           fetch-depth: 0
-      - uses: actions/setup-node@v5
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           # xaq's oldest supported Node (its engines field).
           node-version: "22.13"
@@ -30,7 +32,22 @@ jobs:
       - name: Validate manifests
         run: node scripts/validate.mjs
       - name: Check index.json pins
-        run: node scripts/build-index.mjs --check
+        # A pull request is checked against its base branch, fetched explicitly; a push to main against the main it
+        # replaced. Every new or moved pin must name a commit already on that base, with this tree's files.
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE_REF: ${{ github.base_ref }}
+          BEFORE: ${{ github.event.before }}
+        run: |
+          if [ "$EVENT" = "pull_request" ]; then
+            git fetch --no-tags origin "+refs/heads/${BASE_REF}:refs/remotes/origin/${BASE_REF}"
+            base="origin/${BASE_REF}"
+          elif [ -n "$BEFORE" ] && [ "$BEFORE" != "0000000000000000000000000000000000000000" ]; then
+            base="$BEFORE"
+          else
+            base="HEAD^1"
+          fi
+          node scripts/build-index.mjs --check --base "$base"
       - name: Script tests
         run: node --test test/*.test.mjs
       - name: Extension tests
