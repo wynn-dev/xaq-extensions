@@ -1,0 +1,535 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/wynn-dev/xaq/main/docs/xaq-extension.schema.json",
+  "title": "xaq extension manifest (xaq-extension.json), schema 1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "name",
+    "displayName",
+    "version",
+    "description",
+    "kind",
+    "slug"
+  ],
+  "properties": {
+    "schema": {
+      "const": 1
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 32,
+      "pattern": "^[a-z0-9-]{1,32}$",
+      "not": {
+        "enum": [
+          "message",
+          "thread",
+          "label",
+          "account",
+          "sync",
+          "calendar",
+          "connection",
+          "approval",
+          "xaq"
+        ]
+      }
+    },
+    "displayName": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64
+    },
+    "version": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$"
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 500
+    },
+    "kind": {
+      "enum": [
+        "remote",
+        "code"
+      ]
+    },
+    "slug": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 24,
+      "pattern": "^[a-z0-9-]{1,24}$"
+    },
+    "remote": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "auth"
+      ],
+      "properties": {
+        "url": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2048,
+          "pattern": "^https://[^\\s@/]+(/\\S*)?$"
+        },
+        "userServer": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "defaultPath"
+          ],
+          "properties": {
+            "defaultPath": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200,
+              "pattern": "^/[A-Za-z0-9_.~\\-/]*$"
+            },
+            "sameOriginIssuer": {
+              "type": "boolean"
+            }
+          }
+        },
+        "auth": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "type"
+              ],
+              "properties": {
+                "type": {
+                  "const": "none"
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "type",
+                "headerName"
+              ],
+              "properties": {
+                "type": {
+                  "const": "header"
+                },
+                "headerName": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 100,
+                  "pattern": "^[A-Za-z0-9-]{1,100}$"
+                },
+                "prefix": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 32,
+                  "pattern": "^[\\x21-\\x7e]+ ?$"
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "type"
+              ],
+              "properties": {
+                "type": {
+                  "const": "mcp_oauth"
+                },
+                "broadScopes": {
+                  "type": "array",
+                  "maxItems": 50,
+                  "uniqueItems": true,
+                  "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200,
+                    "pattern": "^[\\x21\\x23-\\x5b\\x5d-\\x7e]+$"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      },
+      "oneOf": [
+        {
+          "required": [
+            "url"
+          ],
+          "not": {
+            "required": [
+              "userServer"
+            ]
+          }
+        },
+        {
+          "required": [
+            "userServer"
+          ],
+          "not": {
+            "required": [
+              "url"
+            ]
+          }
+        }
+      ]
+    },
+    "code": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "entry",
+        "auth"
+      ],
+      "properties": {
+        "entry": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "pattern": "^(?!\\/)(?!.*(^|\\/)\\.\\.?(\\/|$))[A-Za-z0-9_./-]{1,200}\\.(mjs|js)$"
+        },
+        "node": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[<>=^~ 0-9.x|*-]+$"
+        },
+        "auth": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "type"
+              ],
+              "properties": {
+                "type": {
+                  "const": "none"
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "type",
+                "authorizeUrl",
+                "tokenUrl",
+                "scopes",
+                "clientIdInput",
+                "clientSecretInput"
+              ],
+              "properties": {
+                "type": {
+                  "const": "user_app"
+                },
+                "authorizeUrl": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 2048,
+                  "pattern": "^https://[^\\s@/]+(/\\S*)?$"
+                },
+                "tokenUrl": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 2048,
+                  "pattern": "^https://[^\\s@/]+(/\\S*)?$"
+                },
+                "scopes": {
+                  "type": "array",
+                  "maxItems": 50,
+                  "uniqueItems": true,
+                  "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200,
+                    "pattern": "^[\\x21\\x23-\\x5b\\x5d-\\x7e]+$"
+                  }
+                },
+                "clientIdInput": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 64,
+                  "pattern": "^[a-z][a-z0-9_]{0,63}$"
+                },
+                "clientSecretInput": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 64,
+                  "pattern": "^[a-z][a-z0-9_]{0,63}$"
+                }
+              }
+            }
+          ]
+        },
+        "network": {
+          "type": "array",
+          "maxItems": 50,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 253,
+            "pattern": "^(?=.{1,253}$)(\\*\\.)?[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*$"
+          }
+        },
+        "events": {
+          "type": "array",
+          "maxItems": 50,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 90,
+            "pattern": "^[a-z0-9-]{1,24}\\.[a-z0-9_]{1,64}$"
+          }
+        }
+      }
+    },
+    "reconnectPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "maxLifetimeDays": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 3650
+        },
+        "idleDays": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 3650
+        },
+        "tokenLifetimeCapDays": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 3650
+        }
+      }
+    },
+    "setup": {
+      "type": "array",
+      "maxItems": 30,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "title",
+          "body"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 32,
+            "pattern": "^[a-z0-9-]{1,32}$"
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "body": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4000
+          },
+          "link": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "label",
+              "url"
+            ],
+            "properties": {
+              "label": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 120
+              },
+              "url": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2048,
+                "pattern": "^(https://|\\{\\{)"
+              }
+            }
+          },
+          "copy": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "label",
+              "value"
+            ],
+            "properties": {
+              "label": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 120
+              },
+              "value": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2048
+              }
+            }
+          },
+          "input": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "key",
+              "label"
+            ],
+            "properties": {
+              "key": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64,
+                "pattern": "^[a-z][a-z0-9_]{0,63}$"
+              },
+              "label": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 120
+              },
+              "secret": {
+                "type": "boolean"
+              },
+              "pattern": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 500
+              },
+              "placeholder": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              }
+            }
+          },
+          "when": {
+            "const": "webhookUrl"
+          }
+        }
+      }
+    },
+    "risk": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "tools"
+      ],
+      "properties": {
+        "tools": {
+          "type": "object",
+          "maxProperties": 1000,
+          "propertyNames": {
+            "pattern": "^[A-Za-z0-9_.\\-/]{1,128}$",
+            "maxLength": 128
+          },
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "class"
+            ],
+            "properties": {
+              "class": {
+                "enum": [
+                  "read",
+                  "write",
+                  "risky"
+                ]
+              },
+              "target": {
+                "oneOf": [
+                  {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 512,
+                    "pattern": "^(\\/([^~/]|~[01])*)+$"
+                  },
+                  {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 16,
+                    "uniqueItems": true,
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 512,
+                      "pattern": "^(\\/([^~/]|~[01])*)+$"
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "nameCheckExempt": {
+          "type": "array",
+          "maxItems": 100,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "pattern": "^[A-Za-z0-9_.\\-/]{1,128}$"
+          }
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "remote"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "remote"
+        ],
+        "not": {
+          "required": [
+            "code"
+          ]
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "code"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "code"
+        ],
+        "not": {
+          "required": [
+            "remote"
+          ]
+        }
+      }
+    }
+  ]
+}
