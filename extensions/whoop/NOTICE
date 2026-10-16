@@ -1,0 +1,21 @@
+xaq WHOOP extension
+
+The MCP server code in src/dashboard/ (mcp.ts, whoop.ts, health.ts, insights.ts, analysis.ts, stats.ts) is copied
+verbatim from the WHOOP dashboard, https://github.com/wynn-dev/whoop-dashboard, directory src/lib, at commit
+0518a3679fc9671accc4bcc692ac37e8197dc16f, by its author (Wynn), so the extension answers exactly as the dashboard's
+MCP endpoint did. src/dashboard/UPSTREAM.json records each file's sha256. Everything else in src/ (the live WHOOP data
+source, cache, rate limiting and the xaq host protocol) is new and replaces the dashboard's Postgres store, sync and
+OAuth, which are not included.
+
+dist/server.mjs bundles these third-party packages (MIT unless noted; full license texts in THIRD_PARTY_LICENSES):
+  @modelcontextprotocol/sdk  Copyright (c) 2024 Anthropic, PBC
+  zod                        Copyright (c) 2025 Colin McDonnell
+  zod-to-json-schema (ISC)   Copyright (c) 2020, Stefan Terdell
+  ajv                        Copyright (c) 2015-2021 Evgeny Poberezkin
+  ajv-formats                Copyright (c) 2020 Evgeny Poberezkin
+  fast-deep-equal            Copyright (c) 2017 Evgeny Poberezkin
+  json-schema-traverse       Copyright (c) 2017 Evgeny Poberezkin
+  fast-uri (BSD-3-Clause)    Copyright (c) 2011-2021, Gary Court until https://github.com/garycourt/uri-js/commit/a1acf730b4bba3f1097c9f52e7d9d3aba8cdcaae
+                             Copyright (c) 2021-present The Fastify team
+
+The test fixture's fake WHOOP API (test/fake-whoop.mjs) is adapted from xaq's test/fake-whoop.ts (MIT).

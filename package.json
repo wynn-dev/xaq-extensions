@@ -1,0 +1,23 @@
+{
+  "name": "xaq-extensions",
+  "private": true,
+  "type": "module",
+  "description": "Build and test tooling for the code extensions. Nothing here ships: each extension's dist is one self-contained file.",
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "build": "node extensions/whoop/scripts/build.mjs",
+    "check:dist": "node extensions/whoop/scripts/build.mjs --check",
+    "typecheck": "tsc -p extensions/whoop/tsconfig.json",
+    "test": "node --test --test-concurrency=1 extensions/whoop/test/*.test.mjs",
+    "goldens": "node extensions/whoop/scripts/goldens.mjs"
+  },
+  "devDependencies": {
+    "@modelcontextprotocol/sdk": "1.32.1",
+    "@types/node": "24.10.1",
+    "esbuild": "0.28.2",
+    "typescript": "5.9.3",
+    "zod": "4.5.4"
+  }
+}
