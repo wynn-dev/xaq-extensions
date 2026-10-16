@@ -228,6 +228,9 @@ export function generate() {
       });
     }
   }
+  // As at WHOOP, a cycle ends exactly when the next one starts (the next sleep's onset); today's is still open.
+  cycles.sort((a, b) => Date.parse(a.start) - Date.parse(b.start));
+  for (let i = 0; i < cycles.length - 1; i++) cycles[i].end = cycles[i + 1].start;
   return {
     now: FIXTURE_NOW,
     profile: { user_id: USER, email: "parity@example.com", first_name: "Pat", last_name: "Rity" },

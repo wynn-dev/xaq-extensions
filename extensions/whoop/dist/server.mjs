@@ -27810,7 +27810,12 @@ var RateGate = class {
 // extensions/whoop/src/api.ts
 var WHOOP_ORIGIN = "https://api.prod.whoop.com";
 var PAGE_MAX = 25;
-var MAX_PAGES = 2e3;
+var MAX_BODY_BYTES = 2 * 1024 * 1024;
+var DAY_MS = 864e5;
+function maxPages(path, days) {
+  const perDay = path === PATHS.workout ? 6 : path === PATHS.sleep ? 3 : 1;
+  return Math.ceil(Math.max(1, days) * perDay / PAGE_MAX) + 10;
+}
 var PATHS = {
   profile: "/v2/user/profile/basic",
   cycle: "/v2/cycle",
@@ -27855,6 +27860,33 @@ function retryAfterMs(headers, now = Date.now()) {
   return 6e4;
 }
 var clampRetry = (ms) => Math.min(36e5, Math.max(1e3, Math.ceil(ms)));
+async function readJson(res) {
+  const declared = Number(res.headers.get("content-length"));
+  if (Number.isFinite(declared) && declared > MAX_BODY_BYTES) {
+    await res.body?.cancel();
+    throw new WhoopError("invalid_response", "WHOOP sent a response that is too large");
+  }
+  const chunks = [];
+  let size = 0;
+  if (res.body) {
+    const reader = res.body.getReader();
+    for (; ; ) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > MAX_BODY_BYTES) {
+        await reader.cancel();
+        throw new WhoopError("invalid_response", "WHOOP sent a response that is too large");
+      }
+      chunks.push(value);
+    }
+  }
+  try {
+    return JSON.parse(Buffer.concat(chunks).toString("utf8"));
+  } catch {
+    throw new WhoopError("invalid_response", "WHOOP sent a response that isn't JSON");
+  }
+}
 var WhoopApi = class {
   opts;
   token = null;
@@ -27885,14 +27917,16 @@ var WhoopApi = class {
     this.inflight.set(key, p);
     return p;
   }
-  /** Every record of a collection overlapping [start, end), across pages. */
+  /** Every record of a collection overlapping [start, end), across pages (at most maxPages for the span). */
   async collect(path, start, end) {
     const out = [];
     const seen = /* @__PURE__ */ new Set();
     let next;
-    for (let page = 0; page < MAX_PAGES; page++) {
+    const days = Math.ceil(((end ? Date.parse(end) : this.opts.now()) - Date.parse(start)) / DAY_MS) + 1;
+    const limit = maxPages(path, Number.isFinite(days) ? days : 1);
+    for (let page = 0; page < limit; page++) {
       const body = await this.get(path, { start, end, limit: String(PAGE_MAX), nextToken: next });
-      if (!body) return out;
+      if (!body) throw new WhoopError("incomplete_import", `WHOOP answered 404 for page ${page + 1} of a collection`);
       if (!Array.isArray(body.records)) throw new WhoopError("invalid_response", "a collection page without records");
       for (const r2 of body.records) if (r2 && typeof r2 === "object") out.push(r2);
       const token = typeof body.next_token === "string" && body.next_token ? body.next_token : void 0;
@@ -27991,12 +28025,7 @@ var WhoopApi = class {
         await res.body?.cancel();
         throw new WhoopError("request_failed", `WHOOP refused the request (${res.status})`);
       }
-      let body;
-      try {
-        body = await res.json();
-      } catch {
-        throw new WhoopError("invalid_response", "WHOOP sent a response that isn't JSON");
-      }
+      const body = await readJson(res);
       this.lastOkAt = this.opts.now();
       return body;
     }
@@ -28103,7 +28132,7 @@ function parseHistoryFrom(value, now = Date.now()) {
   const s = value.trim();
   let t;
   if (/^\d{4}-\d{2}-\d{2}$/.test(s)) t = Date.parse(`${s}T00:00:00Z`);
-  else if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d{1,3})?)?(Z|[+-]\d{2}:\d{2})$/.test(s)) t = Date.parse(s);
+  else if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d{1,6})?)?(Z|[+-]\d{2}:\d{2})$/.test(s)) t = Date.parse(s);
   else return null;
   return Number.isFinite(t) && t >= EARLIEST && t < now ? t : null;
 }
@@ -38600,7 +38629,9 @@ var HOUR = 36e5;
 var DAY = 24 * HOUR;
 var KINDS2 = ["cycle", "sleep", "recovery", "workout"];
 var KIND_ORDER = { cycle: 0, sleep: 1, recovery: 2, workout: 3 };
-function isFinal(row) {
+var STALE_PENDING_MS = 30 * DAY;
+function isFinal(row, now = Date.now()) {
+  if (now - row.startAt > STALE_PENDING_MS) return true;
   const state = row.data.score_state;
   if (state !== "SCORED" && state !== "UNSCORABLE") return false;
   if (row.kind === "cycle" && !row.data.end) return false;
@@ -38643,6 +38674,8 @@ function createLiveSource(opts) {
   let needsReconnect = false;
   let revalidate = false;
   const syncWaitMs = opts.syncWaitMs ?? 4e4;
+  const syncCooldownMs = opts.syncCooldownMs ?? 5 * 6e4;
+  let lastSyncAt = null;
   const stats = { loads: 0, fetches: 0, cacheHits: 0, lastFetchFrom: null };
   function dashboard(rows) {
     return {
@@ -38713,7 +38746,7 @@ function createLiveSource(opts) {
     let through = t - settleMs;
     for (const r2 of sorted) {
       if (r2.startAt >= through) break;
-      if (!isFinal(r2)) {
+      if (!isFinal(r2, t)) {
         through = r2.startAt;
         break;
       }
@@ -38791,7 +38824,16 @@ function createLiveSource(opts) {
     // Waits up to syncWaitMs (inside xaq's 60 s per call); a longer refresh carries on in the background and the
     // answer is the dashboard's "Sync started; poll get_status." (`syncing: true`).
     async sync() {
+      const historyChanged = opts.reloadHistoryFrom ? opts.reloadHistoryFrom() !== historyFrom : false;
+      if (!refreshing && !historyChanged && lastSyncAt !== null && now() - lastSyncAt < syncCooldownMs) return { syncing: false };
+      const startedAt = now();
       const current = refresh();
+      current.then(
+        () => {
+          lastSyncAt = startedAt;
+        },
+        () => void 0
+      );
       let timer;
       const outcome = await Promise.race([
         current.then(

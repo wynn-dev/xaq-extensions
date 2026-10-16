@@ -6,7 +6,9 @@
 //
 // Options:
 //   --from YYYY-MM-DD        first day to compare (default 2026-08-25)
-//   --to YYYY-MM-DD          last day (default yesterday, in this machine's time zone)
+//   --to YYYY-MM-DD          last day (default: the day before the dashboard's last sync, from its get_status
+//                            syncedAt, and never after yesterday). The dashboard only syncs while it's open in a
+//                            browser (MCP reads never sync), so press Sync now in it before every run.
 //   --days N                 compare the last N days ending --to instead of starting at --from
 //   --dashboard-slug S       the dashboard connection's slug (default whoop)
 //   --extension-slug S       the extension connection's slug (default whoop-ext)
@@ -72,7 +74,10 @@ function parseArgs(argv) {
       return v;
     };
     if (a === "--from") o.from = val();
-    else if (a === "--to") o.to = val();
+    else if (a === "--to") {
+      o.to = val();
+      o.toGiven = true;
+    }
     else if (a === "--days") o.days = Number(val());
     else if (a === "--dashboard-slug") o.dashboard = val();
     else if (a === "--extension-slug") o.extension = val();
@@ -86,20 +91,53 @@ function parseArgs(argv) {
   }
   const date = /^\d{4}-\d{2}-\d{2}$/;
   const slug = /^[a-z0-9-]{1,24}$/;
-  if (!o.to) {
-    const d = new Date(Date.now() - 86_400_000);
-    o.to = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-  }
-  if (!date.test(o.to) || !date.test(o.from)) throw new Error("--from and --to take YYYY-MM-DD");
-  if (o.days !== null) {
-    if (!Number.isInteger(o.days) || o.days < 1 || o.days > 3650) throw new Error("--days takes a whole number of days");
-    o.from = shiftDate(o.to, 1 - o.days);
-  }
-  if (o.from > o.to) throw new Error("--from is after --to");
+  if (o.to !== null && !date.test(o.to)) throw new Error("--to takes YYYY-MM-DD");
+  if (!date.test(o.from)) throw new Error("--from takes YYYY-MM-DD");
+  if (o.days !== null && (!Number.isInteger(o.days) || o.days < 1 || o.days > 3650)) throw new Error("--days takes a whole number of days");
   if (!slug.test(o.dashboard) || !slug.test(o.extension) || o.dashboard === o.extension) throw new Error("the two slugs must be different connection slugs");
   if (!Number.isInteger(o.maxDiffs) || o.maxDiffs < 0) throw new Error("--max-diffs takes a number");
   if (!Number.isInteger(o.concurrency) || o.concurrency < 1 || o.concurrency > 16) throw new Error("--concurrency takes 1–16");
   return o;
+}
+
+/** This machine's yesterday, YYYY-MM-DD. */
+function yesterday() {
+  const d = new Date(Date.now() - 86_400_000);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+/** Minutes east of UTC for "+02:00". */
+const offsetMinutes = (o) => {
+  const m = /^([+-])(\d{2}):(\d{2})$/.exec(o ?? "");
+  return m ? (Number(m[2]) * 60 + Number(m[3])) * (m[1] === "-" ? -1 : 1) : 0;
+};
+
+/**
+ * The last day the dashboard has complete: the day before its last sync, in UTC and in its own time zone, whichever
+ * is earlier.
+ */
+export function lastCompleteDay(syncedAt, timezone) {
+  const t = Date.parse(syncedAt);
+  if (Number.isNaN(t)) return null;
+  const utc = new Date(t).toISOString().slice(0, 10);
+  const local = new Date(t + offsetMinutes(timezone) * 60_000).toISOString().slice(0, 10);
+  return shiftDate(utc < local ? utc : local, -1);
+}
+
+/**
+ * The instant to give the extension as historyFrom so it loads the same records as the dashboard: a minute after the
+ * dashboard's first night began (its first day's bedtime, in that day's time zone). WHOOP returns every record
+ * overlapping the start, so that keeps the first day's cycle, sleep and recovery and drops the day before.
+ */
+export function suggestedHistoryFrom(firstDate, bedtime, timezone, shiftMs = 60_000) {
+  const m = /^(\d{1,2}):(\d{2})\s*(AM|PM)$/i.exec(String(bedtime ?? "").replace(/[\u202f\u00a0]/g, " ").trim());
+  if (!m || !/^\d{4}-\d{2}-\d{2}$/.test(firstDate ?? "")) return null;
+  let h = Number(m[1]) % 12;
+  if (m[3].toUpperCase() === "PM") h += 12;
+  // An evening bedtime belongs to the night before the wake-up date.
+  const day = h >= 12 ? shiftDate(firstDate, -1) : firstDate;
+  const localMs = Date.parse(`${day}T${String(h).padStart(2, "0")}:${m[2]}:00Z`);
+  return new Date(localMs - offsetMinutes(timezone) * 60_000 + shiftMs).toISOString();
 }
 
 function shiftDate(date, amount) {
@@ -165,6 +203,8 @@ class Mcp {
       method: "POST",
       headers: { "content-type": "application/json", accept: "application/json, text/event-stream", authorization: `Bearer ${this.key}`, "mcp-protocol-version": this.protocol, ...(this.session ? { "mcp-session-id": this.session } : {}) },
       body: JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" }),
+      redirect: "error",
+      signal: AbortSignal.timeout(30_000),
     })
       .then((r) => r.body?.cancel())
       .catch(() => {});
@@ -323,10 +363,26 @@ async function main() {
   if (!key) throw new Error("set XAQ_PARITY_KEY to the parity agent's key (it is never printed)");
   const mcp = new Mcp(base, key);
   await mcp.initialize();
-  const days = daysBetween(opts.from, opts.to);
   const D = opts.dashboard;
   const E = opts.extension;
-  console.log(`WHOOP parity: ${D} (dashboard) vs ${E} (extension), ${days.length} days ${opts.from} → ${opts.to}`);
+
+  // The window ends the day before the dashboard's last sync: later days it simply doesn't have yet.
+  const pre = await mcp.rpc("tools/call", { name: `${D}__get_status`, arguments: {} });
+  const preStatus = pre.result?.structuredContent;
+  if (!preStatus) throw new Error(`${D}__get_status didn't answer (${pre.error?.message ?? pre.result?.content?.[0]?.text?.slice(0, 200) ?? "no result"}): grant the agent read on ${D}`);
+  if (!preStatus.syncedAt) throw new Error("the dashboard has never synced: open it in a browser, press Sync now, wait for it to finish, then run this again");
+  const synced = lastCompleteDay(preStatus.syncedAt, preStatus.timezone);
+  const cap = synced && synced < yesterday() ? synced : yesterday();
+  if (opts.to === null) opts.to = cap;
+  else if (opts.to > cap) console.log(`  ! --to ${opts.to} is after the dashboard's last complete day (${cap}); days after it will differ`);
+  if (opts.days !== null) opts.from = shiftDate(opts.to, 1 - opts.days);
+  if (opts.from > opts.to) throw new Error(`--from ${opts.from} is after --to ${opts.to}`);
+  const ageH = (Date.now() - Date.parse(preStatus.syncedAt)) / 3_600_000;
+  console.log(`WHOOP parity: ${D} (dashboard) vs ${E} (extension)`);
+  console.log(`  dashboard last synced ${preStatus.syncedAt}${ageH > 6 ? ` (${Math.round(ageH)} h ago: press Sync now in the dashboard first for a recent window)` : ""}`);
+  const why = opts.toGiven ? "" : cap === synced ? " (to the day before that sync; override with --to)" : " (to yesterday; override with --to)";
+  console.log(`  comparing ${opts.from} → ${opts.to}${why}`);
+  const days = daysBetween(opts.from, opts.to);
 
   const checks = []; // { tool, day, equal, diff, notes }
   let diffsShown = 0;
@@ -349,8 +405,10 @@ async function main() {
   if (!listedD.length) throw new Error(`the agent sees no ${D}__ tools: grant it (read) on the dashboard connection`);
   if (!listedE.length) throw new Error(`the agent sees no ${E}__ tools: grant it (read) on the extension connection`);
   const visibleD = new Set(listedD.map((t) => t.name));
-  // sync_now is listed for the extension (read class) but may be hidden on the dashboard at the read level.
-  record("tools/list", null, listedD.filter((t) => t.name !== "sync_now"), listedE.filter((t) => t.name !== "sync_now" || visibleD.has("sync_now")));
+  // sync_now is listed for the extension (read class) but may be hidden on the dashboard at the read level: it's
+  // left out of both sides here, and compared on its own when both list it.
+  record("tools/list", null, listedD.filter((t) => t.name !== "sync_now"), listedE.filter((t) => t.name !== "sync_now"));
+  if (visibleD.has("sync_now")) record("tools/list sync_now", null, listedD.find((t) => t.name === "sync_now"), listedE.find((t) => t.name === "sync_now") ?? null);
   for (const t of TOOLS) if (!listedE.some((x) => x.name === t)) record("tools/list", null, `${t} listed`, `${t} missing`);
 
   const call = (slug, tool, args) => mcp.rpc("tools/call", { name: `${slug}__${tool}`, arguments: args });
@@ -366,12 +424,27 @@ async function main() {
   const sd = statusD.result?.structuredContent;
   const se = statusE.result?.structuredContent;
   if (sd && se) {
-    console.log(`  dashboard last synced ${sd.syncedAt ?? "never"}; extension last reached WHOOP ${se.syncedAt ?? "never"}${se.syncError ? ` (last error ${se.syncError})` : ""}`);
+    console.log(`  extension last reached WHOOP ${se.syncedAt ?? "never"}${se.syncError ? ` (last error ${se.syncError})` : ""}`);
     if (sd.dataSpan?.first && se.dataSpan?.first && sd.dataSpan.first !== se.dataSpan.first) {
+      // The dashboard's history starts at an instant (its first sync minus 90 days); read its first night from its
+      // own get_day (read-only) to suggest one.
+      const dayOf = async (date) => (await call(D, "get_day", { date, include: [] })).result?.structuredContent?.day ?? null;
+      const first = await dayOf(sd.dataSpan.first);
+      let instant = first ? suggestedHistoryFrom(first.date, first.sleep?.bedtime, first.timezone) : null;
+      let note = instant ? `a minute after the dashboard's first night began (${first.sleep.bedtime} at ${first.timezone})` : "";
+      if (first && !instant && first.nextDate) {
+        // The dashboard's start fell after its first night ended (its first day has a cycle but no sleep): start a
+        // minute before the next night instead. That day's earlier workouts and naps may still differ.
+        const next = await dayOf(first.nextDate);
+        instant = next ? suggestedHistoryFrom(next.date, next.sleep?.bedtime, next.timezone, -60_000) : null;
+        if (instant) note = `a minute before the dashboard's second night began; its first day, which has no sleep, may still differ`;
+      }
+      const value = instant ?? sd.dataSpan.first;
       console.log(
         `  ! the histories start on different days (dashboard ${sd.dataSpan.first}, extension ${se.dataSpan.first}): baselines and insights will differ.\n` +
-          `    Set the extension's history start to the dashboard's: write {"historyFrom": "${sd.dataSpan.first}"} to config.json in its state dir\n` +
-          `    (<xaq data dir>/extension-state/whoop/<connection id>/), then call ${E}__sync_now (it re-reads config.json) and run this again.`,
+          `    Set the extension's history start to the dashboard's: write {"historyFrom": "${value}"} to config.json in its state dir\n` +
+          `    (<xaq data dir>/extension-state/whoop/<connection id>/), then call ${E}__sync_now (it re-reads config.json) and run this again.` +
+          (instant ? `\n    (${instant} is ${note}.)` : ""),
       );
     }
     for (const p of STATUS_INFO) {

@@ -2,7 +2,7 @@
   "repo": "https://github.com/wynn-dev/whoop-dashboard",
   "commit": "0518a3679fc9671accc4bcc692ac37e8197dc16f",
   "path": "src/lib",
-  "note": "Copied from upstream; verbatim except the files in `changed`. test/manifest.test.mjs checks `files` (these copies) and `upstreamFiles` (the originals, which the goldens run). A change here must be deliberate: update this file, NOTICE and, for wording, INTENTIONAL_DIFFERENCES in scripts/parity.mjs.",
+  "note": "Copied from upstream; verbatim except the files in `changed`. extensions/whoop/test/manifest.test.mjs (its src/dashboard tests) checks `files` (these copies) and `upstreamFiles` (the originals, which the goldens run). A change here must be deliberate: update this file, NOTICE and, for wording, INTENTIONAL_DIFFERENCES in scripts/parity.mjs.",
   "changed": {
     "mcp.ts": "Four error texts that pointed at the dashboard's UI now point at xaq (scripts/parity.mjs INTENTIONAL_DIFFERENCES). Nothing else."
   },

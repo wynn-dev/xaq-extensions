@@ -13,7 +13,7 @@
 // - When WHOOP fails, the last good data (or the cached scored days) is served with `syncError` set, as the
 //   dashboard served its stored data after a failed sync. With nothing at all to serve, the call fails with a sentence.
 // sync() (sync_now) re-reads config.json, drops the cache and downloads the whole history again: the way to pick up
-// an edit WHOOP made to an old day, or a new history start. A week-old cache is rebuilt the same way, in the
+// an edit WHOOP made to an old day, or a new history start. At most once per 5-minute cooldown after a success. A week-old cache is rebuilt the same way, in the
 // background, after the load it served.
 
 import { PATHS, WhoopApi, WhoopError } from "./api.ts";
@@ -42,6 +42,8 @@ export interface SourceOptions {
   revalidateMs?: number;
   profileMs?: number;
   syncWaitMs?: number;
+  /** After a successful sync_now, further ones within this window answer its result without refetching. */
+  syncCooldownMs?: number;
 }
 
 interface Profile {
@@ -58,8 +60,15 @@ export interface LiveSource extends McpDataSource {
   whenIdle(): Promise<void>;
 }
 
-/** Final: WHOOP won't score it again. A cycle is final only once it has ended. */
-export function isFinal(row: Row): boolean {
+/** A record still pending (or a cycle still open) this long after it started is taken as final: it never will be. */
+export const STALE_PENDING_MS = 30 * DAY;
+
+/**
+ * Final: WHOOP won't score it again. A cycle is final only once it has ended. Anything older than STALE_PENDING_MS
+ * counts as final whatever its state, so one record WHOOP never scored can't pin the cache's `through` for ever.
+ */
+export function isFinal(row: Row, now = Date.now()): boolean {
+  if (now - row.startAt > STALE_PENDING_MS) return true;
   const state = row.data.score_state;
   if (state !== "SCORED" && state !== "UNSCORABLE") return false;
   if (row.kind === "cycle" && !row.data.end) return false;
@@ -107,6 +116,9 @@ export function createLiveSource(opts: SourceOptions): LiveSource {
   let needsReconnect = false;
   let revalidate = false;
   const syncWaitMs = opts.syncWaitMs ?? 40_000;
+  const syncCooldownMs = opts.syncCooldownMs ?? 5 * 60_000;
+  /** When the last successful sync_now refresh started. */
+  let lastSyncAt: number | null = null;
   const stats = { loads: 0, fetches: 0, cacheHits: 0, lastFetchFrom: null as string | null };
 
   function dashboard(rows: Row[]): DashboardData {
@@ -187,7 +199,7 @@ export function createLiveSource(opts: SourceOptions): LiveSource {
     let through = t - settleMs;
     for (const r of sorted) {
       if (r.startAt >= through) break;
-      if (!isFinal(r)) {
+      if (!isFinal(r, t)) {
         through = r.startAt;
         break;
       }
@@ -274,7 +286,19 @@ export function createLiveSource(opts: SourceOptions): LiveSource {
     // Waits up to syncWaitMs (inside xaq's 60 s per call); a longer refresh carries on in the background and the
     // answer is the dashboard's "Sync started; poll get_status." (`syncing: true`).
     async sync() {
+      // A full refresh costs the whole history in requests from the app's shared daily quota: at most one per
+      // cooldown. Within it the answer is the last one (finished), with the same shape.
+      // A changed history start (config.json) always gets its refresh.
+      const historyChanged = opts.reloadHistoryFrom ? opts.reloadHistoryFrom() !== historyFrom : false;
+      if (!refreshing && !historyChanged && lastSyncAt !== null && now() - lastSyncAt < syncCooldownMs) return { syncing: false };
+      const startedAt = now();
       const current = refresh();
+      current.then(
+        () => {
+          lastSyncAt = startedAt;
+        },
+        () => undefined,
+      );
       let timer: ReturnType<typeof setTimeout> | undefined;
       const outcome = await Promise.race([
         current.then(

@@ -6,7 +6,18 @@ import { RateGate, RateLimitedError } from "./ratelimit.ts";
 
 export const WHOOP_ORIGIN = "https://api.prod.whoop.com";
 export const PAGE_MAX = 25;
-const MAX_PAGES = 2_000;
+/** A WHOOP answer larger than this is refused (a full page of 25 records is about 30 KB). */
+export const MAX_BODY_BYTES = 2 * 1024 * 1024;
+const DAY_MS = 86_400_000;
+
+/**
+ * At most this many pages for a collection over `days` days: generous records-per-day (cycles and recoveries 1,
+ * sleeps with naps 3, workouts 6) plus 10, so a looping or runaway paginator stops early.
+ */
+export function maxPages(path: string, days: number): number {
+  const perDay = path === PATHS.workout ? 6 : path === PATHS.sleep ? 3 : 1;
+  return Math.ceil((Math.max(1, days) * perDay) / PAGE_MAX) + 10;
+}
 
 export const PATHS = {
   profile: "/v2/user/profile/basic",
@@ -82,6 +93,35 @@ export function retryAfterMs(headers: Headers, now = Date.now()): number {
 }
 const clampRetry = (ms: number) => Math.min(3_600_000, Math.max(1_000, Math.ceil(ms)));
 
+/** The response body as JSON, refusing one over MAX_BODY_BYTES (declared or actual) without reading it all. */
+async function readJson(res: Response): Promise<unknown> {
+  const declared = Number(res.headers.get("content-length"));
+  if (Number.isFinite(declared) && declared > MAX_BODY_BYTES) {
+    await res.body?.cancel();
+    throw new WhoopError("invalid_response", "WHOOP sent a response that is too large");
+  }
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  if (res.body) {
+    const reader = res.body.getReader();
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > MAX_BODY_BYTES) {
+        await reader.cancel();
+        throw new WhoopError("invalid_response", "WHOOP sent a response that is too large");
+      }
+      chunks.push(value);
+    }
+  }
+  try {
+    return JSON.parse(Buffer.concat(chunks).toString("utf8"));
+  } catch {
+    throw new WhoopError("invalid_response", "WHOOP sent a response that isn't JSON");
+  }
+}
+
 export class WhoopApi {
   private readonly opts: Required<Omit<ApiOptions, "fetch">> & { fetch: typeof fetch };
   private token: AccessToken | null = null;
@@ -115,14 +155,17 @@ export class WhoopApi {
     return p;
   }
 
-  /** Every record of a collection overlapping [start, end), across pages. */
+  /** Every record of a collection overlapping [start, end), across pages (at most maxPages for the span). */
   async collect<T>(path: string, start: string, end?: string): Promise<T[]> {
     const out: T[] = [];
     const seen = new Set<string>();
     let next: string | undefined;
-    for (let page = 0; page < MAX_PAGES; page++) {
+    const days = Math.ceil(((end ? Date.parse(end) : this.opts.now()) - Date.parse(start)) / DAY_MS) + 1;
+    const limit = maxPages(path, Number.isFinite(days) ? days : 1);
+    for (let page = 0; page < limit; page++) {
       const body = await this.get<{ records?: unknown; next_token?: unknown }>(path, { start, end, limit: String(PAGE_MAX), nextToken: next });
-      if (!body) return out;
+      // A collection never 404s; taking one as "no more records" could cache a partial history as final.
+      if (!body) throw new WhoopError("incomplete_import", `WHOOP answered 404 for page ${page + 1} of a collection`);
       if (!Array.isArray(body.records)) throw new WhoopError("invalid_response", "a collection page without records");
       for (const r of body.records) if (r && typeof r === "object") out.push(r as T);
       const token = typeof body.next_token === "string" && body.next_token ? body.next_token : undefined;
@@ -225,12 +268,7 @@ export class WhoopApi {
         await res.body?.cancel();
         throw new WhoopError("request_failed", `WHOOP refused the request (${res.status})`);
       }
-      let body: unknown;
-      try {
-        body = await res.json();
-      } catch {
-        throw new WhoopError("invalid_response", "WHOOP sent a response that isn't JSON");
-      }
+      const body = await readJson(res);
       this.lastOkAt = this.opts.now();
       return body as T;
     }

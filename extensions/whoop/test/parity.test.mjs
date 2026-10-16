@@ -5,9 +5,13 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
+import { lastCompleteDay, suggestedHistoryFrom } from "../scripts/parity.mjs";
 import { startFakeWhoop } from "./fake-whoop.mjs";
 import { startFakeXaq } from "./fake-xaq.mjs";
+import { newStateDir } from "./harness.mjs";
 import { fixture, setup } from "./helpers.mjs";
 
 const SCRIPT = fileURLToPath(new URL("../scripts/parity.mjs", import.meta.url));
@@ -62,6 +66,42 @@ describe("parity script", () => {
     assert.match(r.out, /✗ get_workout/);
     assert.match(r.out, /NOT at parity/);
     assert.ok(!r.out.includes(KEY));
+  });
+
+  it("ends the window the day before the dashboard's last sync, and suggests the history start instant", () => {
+    assert.equal(lastCompleteDay("2026-10-16T09:00:00Z", "+02:00"), "2026-10-15");
+    // 01:00 on the 17th locally is still the 16th in UTC: the earlier of the two wins.
+    assert.equal(lastCompleteDay("2026-10-16T23:00:00Z", "+02:00"), "2026-10-15");
+    assert.equal(lastCompleteDay("2026-10-17T02:00:00Z", "-04:00"), "2026-10-15");
+    assert.equal(suggestedHistoryFrom("2026-09-03", "11:42\u202fPM", "+02:00"), "2026-09-02T21:43:00.000Z");
+    assert.equal(suggestedHistoryFrom("2026-09-03", "12:20 AM", "+02:00"), "2026-09-02T22:21:00.000Z");
+    assert.equal(suggestedHistoryFrom("2026-09-03", null, "+02:00"), null);
+  });
+
+  it("converges when the dashboard's history starts at an instant: the hint's historyFrom gives parity", async () => {
+    // The "dashboard" here starts its history in the night of 2 to 3 September (as a first sync minus 90 days would).
+    const dash = await setup({ fake: a.fake, stateDir: (() => {
+      const d = newStateDir();
+      writeFileSync(join(d, "config.json"), JSON.stringify({ historyFrom: "2026-09-03T01:00:00Z" }));
+      return d;
+    })() });
+    const extn = await setup({ fake: a.fake });
+    const x = await startFakeXaq({ key: KEY, connections: [{ slug: "whoop", ext: dash.ext, readTools: null }, { slug: "whoop-ext", ext: extn.ext, readTools: READ_ALL }] });
+    try {
+      const args = ["--from", "2026-09-01", "--to", "2026-09-30"];
+      const first = await run({ XAQ_URL: x.url, XAQ_PARITY_KEY: KEY }, args);
+      assert.equal(first.code, 1, first.out);
+      const m = /write (\{"historyFrom": "[^"]+"\})/.exec(first.out);
+      assert.ok(m, first.out);
+      writeFileSync(join(extn.stateDir, "config.json"), m[1]);
+      assert.ok(!(await extn.ext.callTool("sync_now")).isError);
+      const second = await run({ XAQ_URL: x.url, XAQ_PARITY_KEY: KEY }, args);
+      assert.equal(second.code, 0, second.out);
+    } finally {
+      await x.close();
+      await dash.ext.stop();
+      await extn.ext.stop();
+    }
   });
 
   it("refuses a bad key without printing it, and takes slugs as flags", async () => {

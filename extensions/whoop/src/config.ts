@@ -1,8 +1,9 @@
 // Optional settings in `$XAQ_EXT_STATE_DIR/config.json`, written by hand (the extension never writes it):
 //   { "historyFrom": "2026-08-25" }
-// historyFrom: where the loaded history starts, a date (UTC midnight) or an ISO timestamp. The dashboard's answers
-// depend on how far back its data goes (baselines, correlations, dataSpan), so for parity it should be the start of
-// the dashboard's own first record. Default 2026-08-25.
+// historyFrom: where the loaded history starts, a date (UTC midnight) or an ISO instant (e.g.
+// "2026-08-24T21:41:00Z"). WHOOP returns records that overlap the start, so the dashboard's history begins at an
+// instant (its first sync minus 90 days), and its answers depend on it (baselines, correlations, dataSpan): for parity
+// use the instant scripts/parity.mjs suggests. Default 2026-08-25.
 
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -21,7 +22,7 @@ export function parseHistoryFrom(value: unknown, now = Date.now()): number | nul
   const s = value.trim();
   let t: number;
   if (/^\d{4}-\d{2}-\d{2}$/.test(s)) t = Date.parse(`${s}T00:00:00Z`);
-  else if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d{1,3})?)?(Z|[+-]\d{2}:\d{2})$/.test(s)) t = Date.parse(s);
+  else if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d{1,6})?)?(Z|[+-]\d{2}:\d{2})$/.test(s)) t = Date.parse(s);
   else return null;
   return Number.isFinite(t) && t >= EARLIEST && t < now ? t : null;
 }
