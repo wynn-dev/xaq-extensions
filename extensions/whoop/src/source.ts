@@ -13,7 +13,8 @@
 // - When WHOOP fails, the last good data (or the cached scored days) is served with `syncError` set, as the
 //   dashboard served its stored data after a failed sync. With nothing at all to serve, the call fails with a sentence.
 // sync() (sync_now) re-reads config.json, drops the cache and downloads the whole history again: the way to pick up
-// an edit WHOOP made to an old day, or a new history start. The cache is also rebuilt on its own once a week.
+// an edit WHOOP made to an old day, or a new history start. A week-old cache is rebuilt the same way, in the
+// background, after the load it served.
 
 import { PATHS, WhoopApi, WhoopError } from "./api.ts";
 import { CACHE_VERSION, type CacheStore, type Logger, type Row } from "./cache.ts";
@@ -40,6 +41,7 @@ export interface SourceOptions {
   failMemoMs?: number;
   revalidateMs?: number;
   profileMs?: number;
+  syncWaitMs?: number;
 }
 
 interface Profile {
@@ -52,6 +54,8 @@ interface Profile {
 export interface LiveSource extends McpDataSource {
   /** For tests and logs: what the last load fetched. */
   readonly stats: { loads: number; fetches: number; cacheHits: number; lastFetchFrom: string | null };
+  /** Tests: resolves once no load or refresh is running. */
+  whenIdle(): Promise<void>;
 }
 
 /** Final: WHOOP won't score it again. A cycle is final only once it has ended. */
@@ -101,6 +105,8 @@ export function createLiveSource(opts: SourceOptions): LiveSource {
   let refreshing: Promise<Row[]> | null = null;
   let lastError: string | null = null;
   let needsReconnect = false;
+  let revalidate = false;
+  const syncWaitMs = opts.syncWaitMs ?? 40_000;
   const stats = { loads: 0, fetches: 0, cacheHits: 0, lastFetchFrom: null as string | null };
 
   function dashboard(rows: Row[]): DashboardData {
@@ -152,7 +158,9 @@ export function createLiveSource(opts: SourceOptions): LiveSource {
       }
     }
     let cached = full ? null : cache.read(historyFromIso);
-    if (cached && (t - cached.builtAt > revalidateMs || cached.through > t || cached.through < historyFrom)) cached = null;
+    if (cached && (cached.through > t || cached.through < historyFrom)) cached = null;
+    // A week-old cache still serves this load; a full refresh then runs in the background (load() starts it).
+    if (cached && t - cached.builtAt > revalidateMs) revalidate = true;
     // Records starting at or after `from` are replaced by what WHOOP answers now; fetching a day earlier than that
     // covers collections (recovery) whose time filter isn't the record's own start.
     const from = cached ? Math.max(historyFrom, cached.through - overlapMs) : historyFrom;
@@ -210,6 +218,25 @@ export function createLiveSource(opts: SourceOptions): LiveSource {
     return code;
   }
 
+  /** Starts (or joins) a full refresh; its result replaces the memo. Never two at once. */
+  function refresh(): Promise<Row[]> {
+    if (refreshing) return refreshing;
+    revalidate = false;
+    const p = fetchAll(true);
+    refreshing = p;
+    p.then(
+      (rows) => {
+        if (refreshing === p) refreshing = null;
+        succeed(rows);
+      },
+      (err) => {
+        if (refreshing === p) refreshing = null;
+        fail(err);
+      },
+    );
+    return p;
+  }
+
   /** The last good data, else the scored days in the cache: what a failed load still serves. */
   function fallback(): Row[] | null {
     if (lastGood) return lastGood;
@@ -233,7 +260,9 @@ export function createLiveSource(opts: SourceOptions): LiveSource {
         loading ??= fetchAll(false).finally(() => {
           loading = null;
         });
-        return dashboard(succeed(await loading));
+        const rows = succeed(await loading);
+        if (revalidate) void refresh().catch(() => undefined);
+        return dashboard(rows);
       } catch (err) {
         const code = fail(err);
         const rows = fallback();
@@ -242,23 +271,28 @@ export function createLiveSource(opts: SourceOptions): LiveSource {
       }
     },
 
+    // Waits up to syncWaitMs (inside xaq's 60 s per call); a longer refresh carries on in the background and the
+    // answer is the dashboard's "Sync started; poll get_status." (`syncing: true`).
     async sync() {
-      if (!refreshing) {
-        refreshing = fetchAll(true);
-        refreshing.then(
-          (rows) => succeed(rows),
-          () => undefined,
-        );
-      }
-      const current = refreshing;
-      try {
-        await current;
-        return { syncing: false };
-      } catch (err) {
-        throw new Error(fail(err));
-      } finally {
-        if (refreshing === current) refreshing = null;
-      }
+      const current = refresh();
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const outcome = await Promise.race([
+        current.then(
+          () => ({ done: true as const }),
+          (err: unknown) => ({ done: true as const, err }),
+        ),
+        new Promise<{ done: false }>((resolve) => {
+          timer = setTimeout(() => resolve({ done: false }), syncWaitMs);
+        }),
+      ]);
+      clearTimeout(timer);
+      if (!outcome.done) return { syncing: true };
+      if ("err" in outcome) throw new Error(errorCode(outcome.err));
+      return { syncing: false };
+    },
+
+    whenIdle: async () => {
+      while (refreshing || loading) await (refreshing ?? loading)!.catch(() => undefined);
     },
   };
 }

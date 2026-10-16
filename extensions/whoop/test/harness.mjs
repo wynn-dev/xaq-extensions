@@ -85,7 +85,8 @@ export function startExtension(opts) {
             const result = await (opts.credentials ?? (() => ({ accessToken: "test-token", expiresAt: Date.now() + 3_600_000 })))(credentialRequests.length);
             send({ jsonrpc: "2.0", id: msg.id, result });
           } catch (err) {
-            send({ jsonrpc: "2.0", id: msg.id, error: { code: -32001, message: String(err?.message ?? err) } });
+            // xaq's answer when the connection needs re-authorising.
+            send({ jsonrpc: "2.0", id: msg.id, error: { code: -32010, message: String(err?.message ?? err), data: { reason: "needs_reauth" } } });
           }
         } else if (msg.method === "ping") {
           send({ jsonrpc: "2.0", id: msg.id, result: {} });

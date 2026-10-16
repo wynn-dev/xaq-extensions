@@ -50,7 +50,7 @@ export class RateGate {
     this.refillPerMs = (opts.refillPerMinute ?? 60) / 60_000;
     this.dailyBudget = opts.dailyBudget ?? 5_000;
     this.maxConcurrent = opts.maxConcurrent ?? 2;
-    this.maxWaitMs = opts.maxWaitMs ?? 45_000;
+    this.maxWaitMs = opts.maxWaitMs ?? 20_000;
     this.tokens = this.capacity;
     this.refilledAt = this.now();
   }

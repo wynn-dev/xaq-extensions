@@ -27742,7 +27742,7 @@ var RateGate = class {
     this.refillPerMs = (opts.refillPerMinute ?? 60) / 6e4;
     this.dailyBudget = opts.dailyBudget ?? 5e3;
     this.maxConcurrent = opts.maxConcurrent ?? 2;
-    this.maxWaitMs = opts.maxWaitMs ?? 45e3;
+    this.maxWaitMs = opts.maxWaitMs ?? 2e4;
     this.tokens = this.capacity;
     this.refilledAt = this.now();
   }
@@ -38641,6 +38641,8 @@ function createLiveSource(opts) {
   let refreshing = null;
   let lastError = null;
   let needsReconnect = false;
+  let revalidate = false;
+  const syncWaitMs = opts.syncWaitMs ?? 4e4;
   const stats = { loads: 0, fetches: 0, cacheHits: 0, lastFetchFrom: null };
   function dashboard(rows) {
     return {
@@ -38688,7 +38690,8 @@ function createLiveSource(opts) {
       }
     }
     let cached2 = full ? null : cache.read(historyFromIso);
-    if (cached2 && (t - cached2.builtAt > revalidateMs || cached2.through > t || cached2.through < historyFrom)) cached2 = null;
+    if (cached2 && (cached2.through > t || cached2.through < historyFrom)) cached2 = null;
+    if (cached2 && t - cached2.builtAt > revalidateMs) revalidate = true;
     const from = cached2 ? Math.max(historyFrom, cached2.through - overlapMs) : historyFrom;
     const fetchFrom = cached2 ? Math.max(historyFrom, from - overlapMs) : historyFrom;
     stats.lastFetchFrom = new Date(fetchFrom).toISOString();
@@ -38738,6 +38741,23 @@ function createLiveSource(opts) {
     log.warn("WHOOP request failed", { code, detail: err instanceof WhoopError ? err.detail : String(err?.message ?? err).slice(0, 200) });
     return code;
   }
+  function refresh() {
+    if (refreshing) return refreshing;
+    revalidate = false;
+    const p = fetchAll(true);
+    refreshing = p;
+    p.then(
+      (rows) => {
+        if (refreshing === p) refreshing = null;
+        succeed(rows);
+      },
+      (err) => {
+        if (refreshing === p) refreshing = null;
+        fail(err);
+      }
+    );
+    return p;
+  }
   function fallback() {
     if (lastGood) return lastGood;
     const c = cache.read(historyFromIso);
@@ -38758,7 +38778,9 @@ function createLiveSource(opts) {
         loading ??= fetchAll(false).finally(() => {
           loading = null;
         });
-        return dashboard(succeed(await loading));
+        const rows = succeed(await loading);
+        if (revalidate) void refresh().catch(() => void 0);
+        return dashboard(rows);
       } catch (err) {
         const code = fail(err);
         const rows = fallback();
@@ -38766,23 +38788,27 @@ function createLiveSource(opts) {
         throw new Error(friendly(code));
       }
     },
+    // Waits up to syncWaitMs (inside xaq's 60 s per call); a longer refresh carries on in the background and the
+    // answer is the dashboard's "Sync started; poll get_status." (`syncing: true`).
     async sync() {
-      if (!refreshing) {
-        refreshing = fetchAll(true);
-        refreshing.then(
-          (rows) => succeed(rows),
-          () => void 0
-        );
-      }
-      const current = refreshing;
-      try {
-        await current;
-        return { syncing: false };
-      } catch (err) {
-        throw new Error(fail(err));
-      } finally {
-        if (refreshing === current) refreshing = null;
-      }
+      const current = refresh();
+      let timer;
+      const outcome = await Promise.race([
+        current.then(
+          () => ({ done: true }),
+          (err) => ({ done: true, err })
+        ),
+        new Promise((resolve) => {
+          timer = setTimeout(() => resolve({ done: false }), syncWaitMs);
+        })
+      ]);
+      clearTimeout(timer);
+      if (!outcome.done) return { syncing: true };
+      if ("err" in outcome) throw new Error(errorCode(outcome.err));
+      return { syncing: false };
+    },
+    whenIdle: async () => {
+      while (refreshing || loading) await (refreshing ?? loading).catch(() => void 0);
     }
   };
 }

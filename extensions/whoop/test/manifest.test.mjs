@@ -33,6 +33,7 @@ describe("xaq-extension.json", () => {
       scopes: ["read:recovery", "read:cycles", "read:workout", "read:sleep", "read:profile", "read:body_measurement", "offline"],
       clientIdInput: "client_id",
       clientSecretInput: "client_secret",
+      refreshScope: "offline",
     });
   });
 

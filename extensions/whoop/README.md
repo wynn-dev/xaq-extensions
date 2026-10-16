@@ -44,14 +44,15 @@ There is no database, no history import and no background polling.
   `through`: the start of the first record WHOOP hasn't finished (score `PENDING_SCORE`, or a cycle still open), and
   never later than 7 days ago. Everything after it, including today and anything unscored, is fetched live on every
   load (from a day before `through`, plus a day of margin for the recovery filter). The cache is versioned and tied
-  to `historyFrom` (either changing rebuilds it), bounded (20,000 records, 16 MiB), rebuilt from scratch after a week,
-  written atomically with mode 0600, and safe to delete: a file that doesn't parse or validate is ignored and rebuilt.
-  It holds WHOOP records only, never a token.
+  to `historyFrom` (either changing rebuilds it), bounded (20,000 records, 16 MiB), written atomically with mode 0600,
+  and safe to delete: a file that doesn't parse or validate is ignored and rebuilt. Once a week it is rebuilt from
+  scratch in the background, after a load it still served. It holds WHOOP records only, never a token.
 - **Bursts.** Concurrent calls share one load, identical requests share one fetch, and a load is reused for 60 s, so
   a cron calling five tools costs one round: the profile plus four collections, about 5–8 requests warm.
-- **`sync_now`** answers `{ started, syncing, note }` as before. It now re-reads `config.json`, drops the cache and
-  downloads the whole history again (picking up any edit WHOOP made to an old day). While it runs, `get_status` says
-  `syncing: true`.
+- **`sync_now`** answers `{ started, syncing, note }` as before. It now re-reads `config.json` and downloads the whole
+  history again, replacing the cache (picking up any edit WHOOP made to an old day). It waits up to 40 s, inside
+  xaq's 60 s per call: "Sync finished." (`syncing: false`), or, for a longer refresh, "Sync started; poll get_status."
+  (`syncing: true`) while it carries on. While it runs, `get_status` says `syncing: true`.
 - **`get_status`** keeps the dashboard's fields; these four changed meaning:
   - `syncedAt`: when WHOOP last answered a request (was: the last finished sync);
   - `syncing`: a `sync_now` refresh is running (was: a sync is running);
@@ -69,8 +70,9 @@ WHOOP allows 100 requests a minute and 10,000 a day per app (shared by everythin
 extension's gate (`src/ratelimit.ts`): a token bucket (bursts of 20, then 60 a minute), a daily budget of 5,000, at
 most 2 requests in flight, and after a 429 a shared block for `Retry-After` (or `X-RateLimit-Reset`) plus up to 20%
 jitter that holds every request, restarting with a small burst. A request retries a 429 at most twice and gives up at
-once rather than wait more than 45 s; a 5xx or network error is retried once after 2–2.5 s. A cold load of the
-default history is about 15 requests; a year about 65.
+once rather than wait more than 20 s; a 5xx or network error is retried once after 2–2.5 s. A cold load of the
+default history is about 15 requests and takes seconds; a year is about 65 requests, about 50 s at this rate, near
+xaq's 60 s per call. A load cut off by that limit still finishes and fills the cache, so the next call is fast.
 
 ### Configuration
 

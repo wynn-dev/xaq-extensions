@@ -225,6 +225,7 @@ function liveSource(opts = {}) {
     const u = new URL(url);
     calls.push({ path: u.pathname, start: u.searchParams.get("start"), nextToken: u.searchParams.get("nextToken") });
     if (opts.down?.()) throw new TypeError("fetch failed");
+    if (opts.slow?.()) await new Promise((r) => setTimeout(r, 15));
     if (u.pathname.endsWith("/v2/user/profile/basic")) return res(200, fx.profile);
     const kind = { "/developer/v2/cycle": "cycle", "/developer/v2/recovery": "recovery", "/developer/v2/activity/sleep": "sleep", "/developer/v2/activity/workout": "workout" }[u.pathname];
     const all = collection(fx, kind, u.searchParams.get("start"));
@@ -280,15 +281,17 @@ describe("live source", () => {
     assert.ok(two.calls.length < one.calls.length);
   });
 
-  it("rebuilds the cache after a week, and ignores a corrupt or foreign one", async () => {
+  it("serves a week-old cache, then rebuilds it in the background; ignores a corrupt or foreign one", async () => {
     const one = liveSource();
     await one.source.load();
     const builtAt = JSON.parse(readFileSync(one.cachePath, "utf8")).builtAt;
     const later = liveSource({ dir: one.dir, clock: clock(Date.parse(fixture().now) + 8 * DAY) });
     await later.source.load();
+    assert.ok(!later.calls.some((c) => c.start === "2026-08-25T00:00:00.000Z"), "the load itself used the cache");
+    await later.source.whenIdle();
     const again = JSON.parse(readFileSync(one.cachePath, "utf8"));
     assert.ok(again.builtAt > builtAt);
-    assert.ok(later.calls.some((c) => c.start === "2026-08-25T00:00:00.000Z"), "full refetch");
+    assert.ok(later.calls.some((c) => c.start === "2026-08-25T00:00:00.000Z"), "then a full refetch");
 
     writeFileSync(one.cachePath, "{ torn");
     const torn = liveSource({ dir: one.dir });
@@ -323,6 +326,17 @@ describe("live source", () => {
     assert.equal((await s.source.load()).syncing, true);
     assert.deepEqual(await p, { syncing: false });
     assert.ok(s.calls.slice(before).some((c) => c.start === "2026-08-25T00:00:00.000Z"));
+    assert.equal((await s.source.load()).syncing, false);
+  });
+
+  it("sync() answers syncing:true when the refresh outlasts its wait, and the refresh still lands", async () => {
+    let slow = false;
+    const s = liveSource({ sourceOpts: { syncWaitMs: 20 }, slow: () => slow });
+    await s.source.load();
+    slow = true;
+    assert.deepEqual(await s.source.sync(), { syncing: true });
+    assert.equal((await s.source.load()).syncing, true);
+    await s.source.whenIdle();
     assert.equal((await s.source.load()).syncing, false);
   });
 });
