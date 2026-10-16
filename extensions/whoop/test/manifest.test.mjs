@@ -57,11 +57,31 @@ describe("xaq-extension.json", () => {
 });
 
 describe("src/dashboard", () => {
-  it("is the dashboard's code, verbatim, at the recorded commit", () => {
-    const upstream = JSON.parse(read("../src/dashboard/UPSTREAM.json"));
+  const upstream = JSON.parse(read("../src/dashboard/UPSTREAM.json"));
+  const sha = (buf) => `sha256-${createHash("sha256").update(buf).digest("hex")}`;
+
+  it("is the dashboard's code at the recorded commit, verbatim except the files listed as changed", () => {
     for (const [file, hash] of Object.entries(upstream.files)) {
-      assert.equal(`sha256-${createHash("sha256").update(read(`../src/dashboard/${file}`)).digest("hex")}`, hash, file);
+      assert.equal(sha(read(`../src/dashboard/${file}`)), hash, file);
+      if (!upstream.changed[file]) assert.equal(hash, upstream.upstreamFiles[file], `${file} is verbatim`);
     }
+    assert.deepEqual(Object.keys(upstream.changed), ["mcp.ts"]);
     assert.equal(goldens().source.commit, upstream.commit, "goldens come from the same commit");
+  });
+
+  it("changes in mcp.ts are exactly the listed rewordings of dashboard-UI error texts", async () => {
+    const { INTENTIONAL_DIFFERENCES, intended } = await import("../scripts/parity.mjs");
+    let source = read("../src/dashboard/mcp.ts").toString("utf8");
+    for (const [from, to] of INTENTIONAL_DIFFERENCES) {
+      assert.ok(!source.includes(`'${from}'`), `old text gone: ${from}`);
+      assert.ok(source.includes(`'${to}'`), `new text present: ${to}`);
+      assert.ok(/\bxaq\b/.test(to) && !/dashboard/i.test(to), to);
+      assert.equal(intended(from), to);
+      assert.equal(intended(to), to);
+      // Undoing the rewording must give back the upstream file byte for byte.
+      source = source.replace(`'${to}'`, `'${from}'`);
+    }
+    assert.equal(sha(Buffer.from(source, "utf8")), upstream.upstreamFiles["mcp.ts"]);
+    for (const [from, to] of goldens().intentionalDifferences) assert.equal(intended(from), to);
   });
 });

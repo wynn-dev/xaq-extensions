@@ -134,6 +134,16 @@
    }
   }
  },
+ "intentionalDifferences": [
+  [
+   "The WHOOP connection needs to be renewed in the dashboard before syncing.",
+   "The WHOOP connection needs to be renewed before syncing: reconnect WHOOP in xaq (Connections → WHOOP → Reconnect)."
+  ],
+  [
+   "WHOOP rejected the stored credentials; reconnect in the dashboard.",
+   "WHOOP rejected the stored credentials; reconnect WHOOP in xaq (Connections → WHOOP → Reconnect)."
+  ]
+ ],
  "cases": [
   {
    "name": "tools/list",
@@ -26471,6 +26481,85 @@
      }
     ],
     "isError": true
+   }
+  },
+  {
+   "name": "sync_now (token rejected)",
+   "method": "tools/call",
+   "params": {
+    "name": "sync_now",
+    "arguments": {}
+   },
+   "scenario": "sync_rejected",
+   "result": {
+    "content": [
+     {
+      "type": "text",
+      "text": "WHOOP rejected the stored credentials; reconnect WHOOP in xaq (Connections → WHOOP → Reconnect)."
+     }
+    ],
+    "isError": true
+   }
+  },
+  {
+   "name": "sync_now (needs reconnect)",
+   "method": "tools/call",
+   "params": {
+    "name": "sync_now",
+    "arguments": {}
+   },
+   "scenario": "needs_reconnect",
+   "result": {
+    "content": [
+     {
+      "type": "text",
+      "text": "The WHOOP connection needs to be renewed before syncing: reconnect WHOOP in xaq (Connections → WHOOP → Reconnect)."
+     }
+    ],
+    "isError": true
+   }
+  },
+  {
+   "name": "get_status (needs reconnect)",
+   "method": "tools/call",
+   "params": {
+    "name": "get_status",
+    "arguments": {}
+   },
+   "scenario": "needs_reconnect",
+   "result": {
+    "content": [
+     {
+      "type": "text",
+      "text": "{\"user\":{\"firstName\":\"Pat\",\"lastName\":\"Rity\"},\"syncedAt\":\"2026-10-16T11:58:00.000Z\",\"syncing\":false,\"syncError\":\"reconnect_required\",\"needsReconnect\":true,\"dataSpan\":{\"first\":\"2026-08-25\",\"latest\":\"2026-10-16\",\"days\":53},\"workouts\":53,\"timezone\":\"+02:00\",\"latest\":{\"date\":\"2026-10-16\",\"recovery\":30,\"recoveryZone\":\"low\",\"strain\":3,\"sleepHours\":6.37,\"hrv\":101.6,\"rhr\":53}}"
+     }
+    ],
+    "structuredContent": {
+     "user": {
+      "firstName": "Pat",
+      "lastName": "Rity"
+     },
+     "syncedAt": "2026-10-16T11:58:00.000Z",
+     "syncing": false,
+     "syncError": "reconnect_required",
+     "needsReconnect": true,
+     "dataSpan": {
+      "first": "2026-08-25",
+      "latest": "2026-10-16",
+      "days": 53
+     },
+     "workouts": 53,
+     "timezone": "+02:00",
+     "latest": {
+      "date": "2026-10-16",
+      "recovery": 30,
+      "recoveryZone": "low",
+      "strain": 3,
+      "sleepHours": 6.37,
+      "hrv": 101.6,
+      "rhr": 53
+     }
+    }
    }
   }
  ]

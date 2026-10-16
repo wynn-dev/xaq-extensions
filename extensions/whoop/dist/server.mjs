@@ -37754,7 +37754,7 @@ async function loadOrFail(source) {
   const data = await source.load();
   if (!data)
     return failure(
-      "No WHOOP account is connected to this dashboard yet. Open the dashboard and use Connect WHOOP."
+      "No WHOOP account is connected to xaq yet. Connect WHOOP in xaq (Connections → WHOOP → Connect)."
     );
   const days = buildDailyStats(data.records);
   const latest = days.at(-1);
@@ -38459,10 +38459,10 @@ function createFormServer(source) {
     async () => {
       const data = await source.load();
       if (!data)
-        return failure("No WHOOP account is connected to this dashboard yet.");
+        return failure("No WHOOP account is connected to xaq yet.");
       if (data.needsReconnect)
         return failure(
-          "The WHOOP connection needs to be renewed in the dashboard before syncing."
+          "The WHOOP connection needs to be renewed before syncing: reconnect WHOOP in xaq (Connections → WHOOP → Reconnect)."
         );
       if (data.syncing)
         return text({
@@ -38480,7 +38480,7 @@ function createFormServer(source) {
       } catch (error61) {
         const code = error61 instanceof Error ? error61.message : "sync_failed";
         return failure(
-          code === "rate_limited" ? "WHOOP rate limit reached. Try again in a few minutes." : code === "reconnect_required" ? "WHOOP rejected the stored credentials; reconnect in the dashboard." : `Sync did not finish (${code}). Previously synced data is still available.`
+          code === "rate_limited" ? "WHOOP rate limit reached. Try again in a few minutes." : code === "reconnect_required" ? "WHOOP rejected the stored credentials; reconnect WHOOP in xaq (Connections → WHOOP → Reconnect)." : `Sync did not finish (${code}). Previously synced data is still available.`
         );
       }
     }

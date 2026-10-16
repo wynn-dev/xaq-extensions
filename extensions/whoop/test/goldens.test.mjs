@@ -12,10 +12,12 @@ import { newStateDir, startExtension } from "./harness.mjs";
 import { fixture, goldens, normalise, setup } from "./helpers.mjs";
 
 const g = goldens();
+const base = g.cases.filter((c) => !c.scenario);
+const scenario = (name) => g.cases.find((c) => c.name === name);
 
 async function runAll(ext) {
   const out = [];
-  for (const c of g.cases) {
+  for (const c of base) {
     try {
       out.push({ name: c.name, result: await ext.request(c.method, c.params) });
     } catch (err) {
@@ -27,7 +29,7 @@ async function runAll(ext) {
 
 function compare(actual, label) {
   const diffs = [];
-  g.cases.forEach((c, i) => {
+  base.forEach((c, i) => {
     const want = c.error ? { error: c.error } : normalise(c.result);
     const got = actual[i].error ? { error: actual[i].error } : normalise(actual[i].result);
     try {
@@ -36,7 +38,7 @@ function compare(actual, label) {
       diffs.push(`${label}: ${c.name}\n  want ${JSON.stringify(want).slice(0, 400)}\n  got  ${JSON.stringify(got).slice(0, 400)}`);
     }
   });
-  assert.equal(diffs.length, 0, `${diffs.length} of ${g.cases.length} differ:\n${diffs.slice(0, 8).join("\n")}`);
+  assert.equal(diffs.length, 0, `${diffs.length} of ${base.length} differ:\n${diffs.slice(0, 8).join("\n")}`);
 }
 
 describe("golden parity with the dashboard's mcp.ts", () => {
@@ -69,6 +71,32 @@ describe("golden parity with the dashboard's mcp.ts", () => {
       const starts = fake.apiRequests().slice(before).filter((r) => r.path !== "/developer/v2/user/profile/basic" && !r.query.nextToken).map((r) => r.query.start);
       assert.ok(starts.length > 0);
       for (const start of starts) assert.ok(start > g.historyFrom, `warm fetch starts after the history start (${start})`);
+    } finally {
+      await s.close({ keepFake: true });
+    }
+  });
+
+  it("scenarios: sync_now's reconnect errors and the flagged status match (worded for xaq)", async () => {
+    let ok = true;
+    const s = await setup({
+      fake,
+      token: "scenario-token",
+      credentials: () => {
+        if (!ok) throw new Error("revoked");
+        return { accessToken: "scenario-token", expiresAt: Date.now() + 3_600_000 };
+      },
+    });
+    try {
+      assert.ok(!(await s.ext.callTool("get_status")).isError);
+      fake.state.validTokens.delete("scenario-token");
+      ok = false;
+      // WHOOP rejects the token during the refresh, then the connection is flagged.
+      for (const name of ["sync_now (token rejected)", "sync_now (needs reconnect)", "get_status (needs reconnect)"]) {
+        const want = scenario(name);
+        assert.ok(want, name);
+        const got = await s.ext.request(want.method, want.params);
+        assert.deepStrictEqual(normalise(got), normalise(want.result), name);
+      }
     } finally {
       await s.close({ keepFake: true });
     }

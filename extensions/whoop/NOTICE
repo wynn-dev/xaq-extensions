@@ -1,9 +1,14 @@
 xaq WHOOP extension
 
 The MCP server code in src/dashboard/ (mcp.ts, whoop.ts, health.ts, insights.ts, analysis.ts, stats.ts) is copied
-verbatim from the WHOOP dashboard, https://github.com/wynn-dev/whoop-dashboard, directory src/lib, at commit
+from the WHOOP dashboard, https://github.com/wynn-dev/whoop-dashboard, directory src/lib, at commit
 0518a3679fc9671accc4bcc692ac37e8197dc16f, by its author (Wynn), so the extension answers exactly as the dashboard's
-MCP endpoint did. src/dashboard/UPSTREAM.json records each file's sha256. Everything else in src/ (the live WHOOP data
+MCP endpoint did. src/dashboard/UPSTREAM.json records each file's sha256, before and after.
+
+Changed from upstream: in mcp.ts only, four error texts that sent the reader to the dashboard's own UI now point at
+xaq (for example "reconnect in the dashboard" became "reconnect WHOOP in xaq (Connections → WHOOP → Reconnect)").
+The exact pairs are INTENTIONAL_DIFFERENCES in scripts/parity.mjs; the goldens and the parity check apply them.
+Everything else in those files is verbatim. Everything else in src/ (the live WHOOP data
 source, cache, rate limiting and the xaq host protocol) is new and replaces the dashboard's Postgres store, sync and
 OAuth, which are not included.
 

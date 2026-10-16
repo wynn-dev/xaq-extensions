@@ -29,11 +29,28 @@
 //   - xaq's `<tool_output source="<slug>/<tool>" nonce="…" untrusted>` wrapper around each text block: stripped
 //     (its source names the connection and its nonce is random per response);
 //   - the `<slug>__` prefix of tool, prompt and resource names, and `xaq://<slug>/` resource URIs: mapped back;
-//   - get_status / whoop://status: VOLATILE_STATUS_FIELDS are dropped.
+//   - get_status / whoop://status: VOLATILE_STATUS_FIELDS are dropped;
+//   - INTENTIONAL_DIFFERENCES: the dashboard's error texts that pointed at its own UI, which the extension words for
+//     xaq; a dashboard text exactly equal to one of them is replaced by the extension's wording.
 // Calls without an explicit end date (which would include today, still changing) are not compared.
 // The key is read from the environment and never printed.
 
 import process from "node:process";
+import { pathToFileURL } from "node:url";
+
+/**
+ * Error texts the extension changed on purpose (src/dashboard/mcp.ts, see NOTICE): the dashboard's wording → the
+ * extension's. Exact whole-text matches only. Shared with scripts/goldens.mjs, which applies it to the goldens.
+ */
+export const INTENTIONAL_DIFFERENCES = Object.freeze([
+  ["No WHOOP account is connected to this dashboard yet. Open the dashboard and use Connect WHOOP.", "No WHOOP account is connected to xaq yet. Connect WHOOP in xaq (Connections → WHOOP → Connect)."],
+  ["No WHOOP account is connected to this dashboard yet.", "No WHOOP account is connected to xaq yet."],
+  ["The WHOOP connection needs to be renewed in the dashboard before syncing.", "The WHOOP connection needs to be renewed before syncing: reconnect WHOOP in xaq (Connections → WHOOP → Reconnect)."],
+  ["WHOOP rejected the stored credentials; reconnect in the dashboard.", "WHOOP rejected the stored credentials; reconnect WHOOP in xaq (Connections → WHOOP → Reconnect)."],
+]);
+const INTENTIONAL = new Map(INTENTIONAL_DIFFERENCES);
+/** The dashboard's text as the extension words it. */
+export const intended = (text) => (typeof text === "string" && INTENTIONAL.has(text) ? INTENTIONAL.get(text) : text);
 
 const VOLATILE_STATUS_FIELDS = ["syncedAt", "syncing", "syncError", "needsReconnect"];
 const STATUS_COMPARED = ["user", "dataSpan.first"];
@@ -186,7 +203,7 @@ function normaliseStatus(s) {
 function normaliseTool(r, tool, notes) {
   if (r.error) return { rpcError: r.error.message };
   const res = r.result;
-  const texts = (res.content ?? []).map((c) => (c.type === "text" ? unwrap(c.text, notes) : { [c.type]: "…" }));
+  const texts = (res.content ?? []).map((c) => (c.type === "text" ? intended(unwrap(c.text, notes)) : { [c.type]: "…" }));
   const parsed = texts.map((t) => {
     if (typeof t !== "string") return t;
     try {
@@ -450,7 +467,9 @@ async function main() {
   process.exit(failed ? 1 : 0);
 }
 
-main().catch((err) => {
-  console.error(`parity: ${err.message}`);
-  process.exit(2);
-});
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main().catch((err) => {
+    console.error(`parity: ${err.message}`);
+    process.exit(2);
+  });
+}

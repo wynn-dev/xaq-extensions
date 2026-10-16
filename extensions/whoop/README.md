@@ -2,14 +2,17 @@
 
 A `code` extension (xaq `docs/EXTENSIONS.md`): one bundled MCP server, `dist/server.mjs`, that xaq runs out of
 process for each WHOOP connection. It serves the **WHOOP dashboard's own MCP** (wynn-dev/whoop-dashboard,
-`src/lib/mcp.ts`, copied verbatim into `src/dashboard/`, see `NOTICE`) over the WHOOP API, read live, so agents that
+`src/lib/mcp.ts`, copied into `src/dashboard/`, verbatim but for four error texts, see `NOTICE`) over the WHOOP API, read live, so agents that
 called the dashboard's tools get the same answers from xaq under the same names (`whoop__<tool>`), and the dashboard
 can be retired.
 
 ## What it serves
 
 Exactly the dashboard's surface, with the same names, titles, descriptions, input and output schemas, annotations,
-text and `structuredContent`:
+text and `structuredContent`. The only change: four error texts that sent the reader to the dashboard's UI ("reconnect
+in the dashboard", "No WHOOP account is connected to this dashboard yet…") now point at xaq, for example "reconnect
+WHOOP in xaq (Connections → WHOOP → Reconnect)". They are listed in `INTENTIONAL_DIFFERENCES` in `scripts/parity.mjs`
+and in `NOTICE`.
 
 | Kind | Name | Notes |
 | --- | --- | --- |
@@ -28,9 +31,10 @@ text and `structuredContent`:
 Server info `form-whoop` 1.0.0 and its `instructions` are the dashboard's too. Through xaq, prompts are
 `whoop__weekly_review` and resources `xaq://whoop/<encodeURIComponent(uri)>`.
 
-`test/goldens/goldens.json` holds the dashboard's answers to 221 requests over the fixture, made by running the
-dashboard's `mcp.ts` itself (`scripts/goldens.mjs`). `test/goldens.test.mjs` requires the extension to give the
-identical answers (only `syncedAt` is normalised), cold and from its cache.
+`test/goldens/goldens.json` holds the dashboard's answers to 224 requests over the fixture, made by running the
+dashboard's `mcp.ts` itself (`scripts/goldens.mjs`), including sync_now's two reconnect errors; the reworded error
+texts are applied to it and listed in the file. `test/goldens.test.mjs` requires the extension to give the identical
+answers (only `syncedAt` is normalised), cold and from its cache.
 
 ## How it gets the data
 
@@ -151,8 +155,9 @@ day; over the window, `list_days` (all 20 fields), `list_workouts` (every page) 
 parity (1 on a difference, 2 when it can't run).
 
 Normalised, and nothing else: xaq's `<tool_output source=… nonce=… untrusted>` wrapper, the `<slug>__` and
-`xaq://<slug>/` prefixes, and in `get_status`/`whoop://status` the fields `syncedAt`, `syncing`, `syncError` and
-`needsReconnect` (their meaning changed, above). `get_status` is compared on `user` and `dataSpan.first` only;
+`xaq://<slug>/` prefixes, in `get_status`/`whoop://status` the fields `syncedAt`, `syncing`, `syncError` and
+`needsReconnect` (their meaning changed, above), and the dashboard's four reworded error texts
+(`INTENTIONAL_DIFFERENCES`, exact whole-text matches). `get_status` is compared on `user` and `dataSpan.first` only;
 `dataSpan.latest`, `dataSpan.days`, `workouts`, `timezone` and `latest` are printed for information (they include
 today, which the dashboard only knows as of its last sync). `tools/list` ignores `readOnlyHint`, which xaq sets from
 its own read class (`sync_now` is a write by the generic rules on the dashboard connection, a read in this
@@ -162,18 +167,24 @@ make the dashboard sync. If the two histories start on different days the script
 A difference on the most recent days can be the dashboard's sync lag (it prints when the dashboard last synced);
 anything else is a real difference.
 
-## Connecting with an existing WHOOP app (Wynn)
+## Connecting WHOOP (Wynn)
+
+**Recommended: a separate WHOOP app for xaq.** WHOOP may keep only one grant per app and person. If xaq is approved
+with the app the WHOOP dashboard uses, the dashboard's grant can be revoked: the dashboard stops syncing, the parity
+check compares against stale data, and Hermes's crons (still on the dashboard until the swap) break. A separate app
+also gives xaq its own rate limit (100 requests a minute per app).
 
 In the WHOOP Developer Dashboard (https://developer-dashboard.whoop.com, signed in with the WHOOP account):
 
-1. **Apps** → click the app the WHOOP dashboard uses → the **pencil icon** (edit).
-2. Under **Redirect URIs**, add one more URI: `<xaq publicUrl>/oauth/connections/callback` (xaq's console shows the
-   exact value to copy in the setup step). Keep the existing URIs: the dashboard still needs its own. WHOOP wants
-   https; without an https public URL use `https://localhost/oauth/connections/callback` and paste the error page's
-   address back into xaq after approving.
-3. Check the scopes `read:recovery`, `read:cycles`, `read:workout`, `read:sleep`, `read:profile`,
-   `read:body_measurement` are ticked, then save. (Not the red trash can: it deletes the app.)
-4. The app's page shows its **Client ID** and **Client Secret** (Apps → the app). Copy both.
+1. **Create App** (if asked for a team first: **Get Started**, any name, **Create Team**). Name it, for example, xaq.
+2. Tick the scopes `read:recovery`, `read:cycles`, `read:workout`, `read:sleep`, `read:profile`,
+   `read:body_measurement`, and `offline` if the dashboard lists it (xaq requests `offline` when connecting; that's
+   what gives it a refresh token).
+3. In **Redirect URIs**, paste xaq's `<publicUrl>/oauth/connections/callback` (xaq's console shows the exact value
+   to copy in the setup step). WHOOP wants https; without an https public URL use
+   `https://localhost/oauth/connections/callback` and paste the error page's address back into xaq after approving.
+   Leave the Webhook URL empty. Click **Create**.
+4. The app's page shows its **Client ID** and **Client Secret** (later: Apps → the app). Copy both.
 
 In xaq's console:
 
@@ -183,8 +194,14 @@ In xaq's console:
 7. Give the parity agent **read** on both `whoop` (the dashboard) and `whoop-ext`, and hand its key to whoever runs
    `parity.mjs` as `XAQ_PARITY_KEY`.
 
-If, after step 6, the dashboard's `get_status` reports `needsReconnect: true`, WHOOP doesn't keep two grants of the
-same app for one member: use a new app for xaq instead (same steps, Create App; an account may have 5).
+**Not recommended: reusing the dashboard's app.** Only if a new app isn't possible (an account may have 5). The risk,
+plainly: approving xaq with the dashboard's app may revoke the dashboard's grant, breaking the dashboard, the parity
+window and Hermes's crons until the dashboard is reconnected, and reconnecting the dashboard may in turn revoke xaq's.
+The two also share one rate limit. If you accept that, instead of steps 1–3: Apps → the dashboard's app → the
+**pencil icon** → under **Redirect URIs** add xaq's `<publicUrl>/oauth/connections/callback` as one more URI (keep
+the existing ones) → check the six scopes → save (not the red trash can: it deletes the app). Then steps 4–7. Right
+after step 6, check the dashboard's `get_status`: `needsReconnect: true` means the grant was revoked; switch to a
+separate app.
 
 ## The swap: the extension takes the slug `whoop`
 
@@ -205,5 +222,5 @@ short name" control:
 Rollback: `xaq connections rename whoop --slug whoop-ext`, then `xaq connections rename whoop-dash --slug whoop`.
 
 Fallback without the rename command: `xaq connections remove whoop` (the dashboard) and `xaq connections remove
-whoop-ext`, then Connections → Add → WHOOP → slug `whoop` with the same Client ID and Secret → Connect → approve, and
-grant Hermes's agent read on it. The cache starts cold (about 15 requests on the first call).
+whoop-ext`, then Connections → Add → WHOOP → slug `whoop` with the same Client ID and Secret (xaq's own app) →
+Connect → approve, and grant Hermes's agent read on it. The cache starts cold (about 15 requests on the first call).
