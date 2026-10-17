@@ -1,1 +1,45 @@
-{ "schema": 1, "extensions": [] }
+{
+  "schema": 1,
+  "extensions": [
+    {
+      "name": "brightspace",
+      "displayName": "Brightspace",
+      "description": "Your own Brightspace (D2L) MCP server: agents read your courses, assignments, grades, announcements, discussions and course content. It only reads; nothing is submitted or posted.",
+      "kind": "remote",
+      "version": "1.0.0",
+      "path": "extensions/brightspace",
+      "commit": "4130a3abc1b48a371df1290e6e818be0aa08ee6b",
+      "integrity": "sha256-HuvzSso1Q2ZdClv41ZxtrhcSEjfUjtg5cKEr7KVtsOQ="
+    },
+    {
+      "name": "notion",
+      "displayName": "Notion",
+      "description": "Notion's hosted MCP server: search, read and edit pages, databases and comments in a workspace you choose. Sign in with Notion; nothing to set up.",
+      "kind": "remote",
+      "version": "1.0.0",
+      "path": "extensions/notion",
+      "commit": "4130a3abc1b48a371df1290e6e818be0aa08ee6b",
+      "integrity": "sha256-TwzJEkAqqLv41DlxDVOghtHxvLC9KldLAsXxEXNqCFU="
+    },
+    {
+      "name": "t3code",
+      "displayName": "T3 Code",
+      "description": "Your own T3 Code server: agents read, start, message and stop T3 threads and projects. One connection per T3 server, signed in with a T3 pairing code.",
+      "kind": "remote",
+      "version": "1.0.0",
+      "path": "extensions/t3code",
+      "commit": "4130a3abc1b48a371df1290e6e818be0aa08ee6b",
+      "integrity": "sha256-uqf721cij+o3eWwqJov4QU2xNx0POX0kaSJWYJz43As="
+    },
+    {
+      "name": "whoop",
+      "displayName": "WHOOP",
+      "description": "Your WHOOP recovery, sleep, strain and workouts, with the WHOOP dashboard's trends and insights, read live from WHOOP with your own WHOOP app.",
+      "kind": "code",
+      "version": "1.0.0",
+      "path": "extensions/whoop",
+      "commit": "4130a3abc1b48a371df1290e6e818be0aa08ee6b",
+      "integrity": "sha256-MR1Ctu/r85Smg5NKRgmnEyb+xX8L3BLzHIKHI98Twng="
+    }
+  ]
+}
