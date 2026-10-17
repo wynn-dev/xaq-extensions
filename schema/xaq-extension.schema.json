@@ -154,6 +154,34 @@
                     "maxLength": 200,
                     "pattern": "^[\\x21\\x23-\\x5b\\x5d-\\x7e]+$"
                   }
+                },
+                "scopeNotes": {
+                  "type": "array",
+                  "maxItems": 50,
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "scope",
+                      "note"
+                    ],
+                    "properties": {
+                      "scope": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200,
+                        "pattern": "^[\\x21\\x23-\\x5b\\x5d-\\x7e]+$"
+                      },
+                      "note": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 1000,
+                        "not": {
+                          "pattern": "\\{\\{|\\}\\}"
+                        }
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -266,6 +294,12 @@
                   "minLength": 1,
                   "maxLength": 64,
                   "pattern": "^[a-z][a-z0-9_]{0,63}$"
+                },
+                "refreshScope": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 1000,
+                  "pattern": "^[\\x21\\x23-\\x5b\\x5d-\\x7e]+( [\\x21\\x23-\\x5b\\x5d-\\x7e]+)*$"
                 }
               }
             }
@@ -361,7 +395,7 @@
                 "type": "string",
                 "minLength": 1,
                 "maxLength": 2048,
-                "pattern": "^(https://|\\{\\{)"
+                "pattern": "^(https://|\\{\\{\\s*(publicUrl|redirectUri|webhookUrl)\\s*\\}\\}([/?#]|$))"
               }
             }
           },
@@ -402,7 +436,10 @@
               "label": {
                 "type": "string",
                 "minLength": 1,
-                "maxLength": 120
+                "maxLength": 120,
+                "not": {
+                  "pattern": "\\{\\{|\\}\\}"
+                }
               },
               "secret": {
                 "type": "boolean"
@@ -415,7 +452,10 @@
               "placeholder": {
                 "type": "string",
                 "minLength": 1,
-                "maxLength": 200
+                "maxLength": 200,
+                "not": {
+                  "pattern": "\\{\\{|\\}\\}"
+                }
               }
             }
           },
