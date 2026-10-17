@@ -1,0 +1,5 @@
+extensions/*/dist/** linguist-generated=true
+extensions/whoop/THIRD_PARTY_LICENSES linguist-generated=true
+extensions/whoop/test/goldens/** linguist-generated=true
+extensions/whoop/test/fixtures/*.json linguist-generated=true
+package-lock.json linguist-generated=true

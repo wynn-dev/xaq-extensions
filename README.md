@@ -25,3 +25,12 @@ Plain Node (22.13 or newer), no dependencies:
 To release: merge the extension first, then in a second PR run `build-index.mjs --commit <merged sha> --write` and
 commit `index.json` (CI refuses a pin on a commit that isn't on main yet). An unchanged extension keeps its
 integrity, so xaq doesn't offer it as an update. `.gitattributes` may not use `export-ignore` or `export-subst`.
+
+## Extensions
+
+| Name | Kind | What |
+| --- | --- | --- |
+| [whoop](extensions/whoop/) | code | WHOOP recovery, sleep, strain and workouts with the WHOOP dashboard's trends and insights, read live. |
+
+Code extensions are built and tested from the repo root (`npm ci --ignore-scripts && npm run build && npm test`);
+their `dist/` is committed and CI checks it's up to date.

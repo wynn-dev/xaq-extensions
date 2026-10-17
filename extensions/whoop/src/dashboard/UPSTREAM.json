@@ -1,0 +1,25 @@
+{
+  "repo": "https://github.com/wynn-dev/whoop-dashboard",
+  "commit": "0518a3679fc9671accc4bcc692ac37e8197dc16f",
+  "path": "src/lib",
+  "note": "Copied from upstream; verbatim except the files in `changed`. extensions/whoop/test/manifest.test.mjs (its src/dashboard tests) checks `files` (these copies) and `upstreamFiles` (the originals, which the goldens run). A change here must be deliberate: update this file, NOTICE and, for wording, INTENTIONAL_DIFFERENCES in scripts/parity.mjs.",
+  "changed": {
+    "mcp.ts": "Four error texts that pointed at the dashboard's UI now point at xaq (scripts/parity.mjs INTENTIONAL_DIFFERENCES). Nothing else."
+  },
+  "files": {
+    "mcp.ts": "sha256-aff300d2c0f2d5771ea7bb839e4b770148476a655dbf6d18a85b1dd43f22b3ea",
+    "whoop.ts": "sha256-5cc96ef76799e38a02599f77e12168a31db8b982213d98c5be2584a532235194",
+    "health.ts": "sha256-0906e06e232becdfd6254ccfd01839b2e40568bb857fa7deaf606709a58a44c8",
+    "insights.ts": "sha256-b7501a3da4e113a9ef91a6348bc43e61c125d413c4047fb1c8d41183edc3023c",
+    "analysis.ts": "sha256-a8aad396cb135f38a8223a6cfe750dbabf83d614b3812939581e7425cdfeb3c1",
+    "stats.ts": "sha256-8dfb6f73c1a095a09d74397cdc50152ed96ba14e36cc09ed339f187c08511353"
+  },
+  "upstreamFiles": {
+    "mcp.ts": "sha256-475e4efb26c6671118cf59f964effe060a523afc9680beec98f46d9245f5dbd2",
+    "whoop.ts": "sha256-5cc96ef76799e38a02599f77e12168a31db8b982213d98c5be2584a532235194",
+    "health.ts": "sha256-0906e06e232becdfd6254ccfd01839b2e40568bb857fa7deaf606709a58a44c8",
+    "insights.ts": "sha256-b7501a3da4e113a9ef91a6348bc43e61c125d413c4047fb1c8d41183edc3023c",
+    "analysis.ts": "sha256-a8aad396cb135f38a8223a6cfe750dbabf83d614b3812939581e7425cdfeb3c1",
+    "stats.ts": "sha256-8dfb6f73c1a095a09d74397cdc50152ed96ba14e36cc09ed339f187c08511353"
+  }
+}

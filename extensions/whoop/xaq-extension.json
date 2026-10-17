@@ -1,0 +1,135 @@
+{
+  "schema": 1,
+  "name": "whoop",
+  "displayName": "WHOOP",
+  "version": "1.0.0",
+  "description": "Your WHOOP recovery, sleep, strain and workouts, with the WHOOP dashboard's trends and insights, read live from WHOOP with your own WHOOP app.",
+  "kind": "code",
+  "slug": "whoop",
+  "code": {
+    "entry": "dist/server.mjs",
+    "node": ">=22.23.2",
+    "auth": {
+      "type": "user_app",
+      "authorizeUrl": "https://api.prod.whoop.com/oauth/oauth2/auth",
+      "tokenUrl": "https://api.prod.whoop.com/oauth/oauth2/token",
+      "scopes": [
+        "read:recovery",
+        "read:cycles",
+        "read:workout",
+        "read:sleep",
+        "read:profile",
+        "read:body_measurement",
+        "offline"
+      ],
+      "clientIdInput": "client_id",
+      "clientSecretInput": "client_secret",
+      "refreshScope": "offline"
+    },
+    "network": [
+      "api.prod.whoop.com"
+    ],
+    "events": []
+  },
+  "setup": [
+    {
+      "id": "dashboard",
+      "title": "Open the WHOOP Developer Dashboard",
+      "body": "Sign in with the same WHOOP account you wear the strap with. Create a new WHOOP app just for xaq, even if you already have one (for example for a WHOOP dashboard): it's free, needs no review because only you use it, and keeps xaq from disturbing anything else that uses your other app.",
+      "link": {
+        "label": "Open the WHOOP Developer Dashboard",
+        "url": "https://developer-dashboard.whoop.com"
+      }
+    },
+    {
+      "id": "team",
+      "title": "Create a team",
+      "body": "The dashboard asks for a team before your first app. Click Get Started, type any name (for example your own), and click Create Team. If you already have a team, skip this step.",
+      "link": {
+        "label": "Open the dashboard",
+        "url": "https://developer-dashboard.whoop.com"
+      }
+    },
+    {
+      "id": "app",
+      "title": "Create an app for xaq",
+      "body": "Click Create App. Give it any name (for example xaq), and tick these scopes: `read:recovery`, `read:cycles`, `read:workout`, `read:sleep`, `read:profile`, `read:body_measurement`, and `offline` if the dashboard lists it (xaq asks for `offline` when you connect, which is what lets it keep the connection alive). In Redirect URIs, paste the address below exactly as shown. Leave the Webhook URL empty: xaq reads WHOOP when your agents ask and doesn't use webhooks. Then click Create. WHOOP needs an https address here: if this one isn't https, give this install an https public URL in Settings first (a Tailscale serve address works) and come back: this step will then show the new address.",
+      "link": {
+        "label": "Create an app",
+        "url": "https://developer-dashboard.whoop.com/apps/create"
+      },
+      "copy": {
+        "label": "Redirect URI",
+        "value": "{{redirectUri}}"
+      }
+    },
+    {
+      "id": "reuse",
+      "title": "Not recommended: reuse an app you already have",
+      "body": "Only if you can't create another app. The risk: WHOOP may keep only one sign-in per app and person, so approving xaq with an app something else already uses (such as a WHOOP dashboard) can sign that other thing out, and both then share the app's rate limit of 100 requests a minute. If you accept that: open Apps, click your app, then click the pencil icon to edit it. Under Redirect URIs, add the address below as one more URI and keep the ones already there. Check that the scopes `read:recovery`, `read:cycles`, `read:workout`, `read:sleep`, `read:profile`, `read:body_measurement` are ticked, then save. Don't click the red trash can: it deletes the app.",
+      "link": {
+        "label": "Open the dashboard",
+        "url": "https://developer-dashboard.whoop.com"
+      },
+      "copy": {
+        "label": "Redirect URI",
+        "value": "{{redirectUri}}"
+      }
+    },
+    {
+      "id": "client-id",
+      "title": "Paste the client ID",
+      "body": "WHOOP shows a Client ID and a Client Secret on the app's page. To see them again, open the app from the Apps list. Copy the Client ID here.",
+      "input": {
+        "key": "client_id",
+        "label": "Client ID",
+        "placeholder": "Client ID from the WHOOP app",
+        "pattern": "^\\S{8,200}$"
+      }
+    },
+    {
+      "id": "client-secret",
+      "title": "Paste the client secret",
+      "body": "Copy the Client Secret here. xaq stores it encrypted, never shows it again and never gives it to the extension.",
+      "input": {
+        "key": "client_secret",
+        "label": "Client Secret",
+        "secret": true,
+        "pattern": "^\\S{8,500}$"
+      }
+    },
+    {
+      "id": "connect",
+      "title": "Connect and approve",
+      "body": "Click Connect. WHOOP asks you to sign in and approve access to your recovery, sleep, cycles, workouts, profile and body measurements. Approve everything: the extension only reads, and xaq keeps the connection alive on its own. Agents get your data live from WHOOP; days WHOOP has finished scoring are cached on this machine so long trends stay fast."
+    }
+  ],
+  "risk": {
+    "tools": {
+      "get_status": {
+        "class": "read"
+      },
+      "get_day": {
+        "class": "read"
+      },
+      "list_days": {
+        "class": "read"
+      },
+      "list_workouts": {
+        "class": "read"
+      },
+      "get_workout": {
+        "class": "read"
+      },
+      "get_trends": {
+        "class": "read"
+      },
+      "get_insights": {
+        "class": "read"
+      },
+      "sync_now": {
+        "class": "read"
+      }
+    }
+  }
+}

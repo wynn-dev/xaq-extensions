@@ -1,0 +1,40 @@
+name: whoop extension
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    paths:
+      - "extensions/whoop/**"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/whoop.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: test (node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ["22.13.0", "24"]
+    steps:
+      # Actions pinned by commit (the tag in the comment), as in ci.yml.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ matrix.node }}
+      - name: Install build tooling (no install scripts)
+        run: npm ci --ignore-scripts
+      - name: dist/server.mjs is up to date
+        run: npm run check:dist
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Tests (the extension runs under node --permission, as xaq spawns it)
+        run: npm test
