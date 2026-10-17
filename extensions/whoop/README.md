@@ -125,10 +125,9 @@ may still differ.
 
 ## Requirements
 
-Node 22.13 or newer runs it, but **use a Node with the January 2026 security releases or later** (about 22.22 or 24.13;
-xaq will require them for code extensions, being verified in xaq's host work): earlier versions have known
-permission-model bypasses, and the permission model is this extension's sandbox. The manifest's `node` field is the
-contract's floor; xaq enforces its own.
+Node **22.23.2, 24.18.1 or 26.5.1** or newer in its line: xaq's floor for code extensions (the manifest says
+`"node": ">=22.23.2"`). Earlier versions have known permission-model bypasses, and the permission model is this
+extension's sandbox. (The code itself runs on 22.13+, which CI also tests.)
 
 ## Build and test
 
@@ -213,16 +212,17 @@ In the WHOOP Developer Dashboard (https://developer-dashboard.whoop.com, signed 
    `read:body_measurement`, and `offline` if the dashboard lists it (xaq requests `offline` when connecting; that's
    what gives it a refresh token).
 3. In **Redirect URIs**, paste xaq's `<publicUrl>/oauth/connections/callback` (xaq's console shows the exact value
-   to copy in the setup step). WHOOP wants https; without an https public URL use
-   `https://localhost/oauth/connections/callback` and paste the error page's address back into xaq after approving.
-   Leave the Webhook URL empty. Click **Create**.
+   to copy in the setup step). xaq needs an **https** public URL for the WHOOP redirect (a Tailscale serve address
+   is https, so Wynn's install is fine); set one in xaq's Settings first if it has none. Leave the Webhook URL
+   empty. Click **Create**.
 4. The app's page shows its **Client ID** and **Client Secret** (later: Apps → the app). Copy both.
 
 In xaq's console:
 
-5. **Extensions** → add **whoop** (official registry) → confirm. This works once the registry pins whoop, which
-   the lead does after this PR merges (`index.json`); before that, `npx xaq-cli ext add <path to extensions/whoop>`
-   installs it from a local checkout, as a third-party install.
+5. Once the registry pins whoop (the lead does that in `index.json` after this PR merges): **Extensions** → add
+   **whoop** → confirm, or `npx xaq-cli ext add whoop`. A local path can't be installed under the name `whoop`: it's
+   an official name, so xaq refuses it from any other source. For development, install a copy whose manifest says
+   `"name": "whoop-dev"` (`npx xaq-cli ext add <path to the copy>`); it shows as third-party.
 6. **Connections** → **Add** → **WHOOP** → short name (slug) `whoop-ext` → paste the Client ID and the Client
    Secret → **Connect** → sign in to WHOOP and approve every scope → back in xaq the connection shows as connected.
 7. Give the parity agent **read** on both `whoop` (the dashboard) and `whoop-ext`, and hand its key to whoever runs

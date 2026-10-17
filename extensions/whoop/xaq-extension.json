@@ -8,7 +8,7 @@
   "slug": "whoop",
   "code": {
     "entry": "dist/server.mjs",
-    "node": ">=22.13",
+    "node": ">=22.23.2",
     "auth": {
       "type": "user_app",
       "authorizeUrl": "https://api.prod.whoop.com/oauth/oauth2/auth",
@@ -53,7 +53,7 @@
     {
       "id": "app",
       "title": "Create an app for xaq",
-      "body": "Click Create App. Give it any name (for example xaq), and tick these scopes: `read:recovery`, `read:cycles`, `read:workout`, `read:sleep`, `read:profile`, `read:body_measurement`, and `offline` if the dashboard lists it (xaq asks for `offline` when you connect, which is what lets it keep the connection alive). In Redirect URIs, paste the address below exactly as shown. Leave the Webhook URL empty: xaq reads WHOOP when your agents ask and doesn't use webhooks. Then click Create. If WHOOP refuses this address (for example because it isn't https), give this install an https public URL in Settings and come back: this step will then show the new address. Without an https address, enter `https://localhost/oauth/connections/callback` instead; after you approve, your browser shows an error page, and you paste that page's full address back here.",
+      "body": "Click Create App. Give it any name (for example xaq), and tick these scopes: `read:recovery`, `read:cycles`, `read:workout`, `read:sleep`, `read:profile`, `read:body_measurement`, and `offline` if the dashboard lists it (xaq asks for `offline` when you connect, which is what lets it keep the connection alive). In Redirect URIs, paste the address below exactly as shown. Leave the Webhook URL empty: xaq reads WHOOP when your agents ask and doesn't use webhooks. Then click Create. WHOOP needs an https address here: if this one isn't https, give this install an https public URL in Settings first (a Tailscale serve address works) and come back: this step will then show the new address.",
       "link": {
         "label": "Create an app",
         "url": "https://developer-dashboard.whoop.com/apps/create"
@@ -90,7 +90,7 @@
     {
       "id": "client-secret",
       "title": "Paste the client secret",
-      "body": "Copy the Client Secret here. xaq stores it encrypted, never shows it again and never gives it to the extension. It's checked with WHOOP right away.",
+      "body": "Copy the Client Secret here. xaq stores it encrypted, never shows it again and never gives it to the extension.",
       "input": {
         "key": "client_secret",
         "label": "Client Secret",

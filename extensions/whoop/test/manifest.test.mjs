@@ -20,7 +20,7 @@ describe("xaq-extension.json", () => {
     assert.match(manifest.version, /^\d+\.\d+\.\d+$/);
     assert.deepEqual(Object.keys(manifest.code).sort(), ["auth", "entry", "events", "network", "node"]);
     assert.equal(manifest.code.entry, "dist/server.mjs");
-    assert.equal(manifest.code.node, ">=22.13");
+    assert.equal(manifest.code.node, ">=22.23.2", "xaq's host floor");
     assert.deepEqual(manifest.code.network, ["api.prod.whoop.com"]);
     assert.deepEqual(manifest.code.events, [], "no polling, so no events");
   });
