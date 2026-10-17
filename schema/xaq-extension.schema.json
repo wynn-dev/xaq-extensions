@@ -156,18 +156,30 @@
                   }
                 },
                 "scopeNotes": {
-                  "type": "object",
-                  "maxProperties": 50,
-                  "propertyNames": {
-                    "pattern": "^[\\x21\\x23-\\x5b\\x5d-\\x7e]+$",
-                    "maxLength": 200
-                  },
-                  "additionalProperties": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 1000,
-                    "not": {
-                      "pattern": "\\{\\{|\\}\\}"
+                  "type": "array",
+                  "maxItems": 50,
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "scope",
+                      "note"
+                    ],
+                    "properties": {
+                      "scope": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200,
+                        "pattern": "^[\\x21\\x23-\\x5b\\x5d-\\x7e]+$"
+                      },
+                      "note": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 1000,
+                        "not": {
+                          "pattern": "\\{\\{|\\}\\}"
+                        }
+                      }
                     }
                   }
                 }
