@@ -43,14 +43,20 @@ describe("fake Sheets/Slides mounted on node:http", () => {
     assert.equal(bad.status, 400);
     assert.deepEqual(Object.keys(bad.body.error).sort(), ["code", "message", "status"]);
     assert.equal(bad.body.error.status, "INVALID_ARGUMENT");
-    const missing = await req("GET", "/v1/presentations/1MissingDeckXXXXXXXXXXXXXXXXXXXXXXXXX");
-    assert.equal(missing.status, 404);
   });
 
-  it("leaves every other path to whoever mounted it", async () => {
-    const other = await req("GET", "/v1/documents/abc");
-    assert.equal(other.status, 418);
-    assert.equal(other.body, "not mine");
+  it("leaves other paths, and files it doesn't hold, to whoever mounted it (body unread)", async () => {
+    for (const [method, path, body] of [
+      ["GET", "/v1/documents/abc"],
+      ["GET", "/v1/presentations/1MissingDeckXXXXXXXXXXXXXXXXXXXXXXXXX"],
+      ["GET", "/v4/spreadsheets/1ShEeTbUdGeT2026000000000000000000000000ccc/values:batchGet?ranges=Sheet1"],
+      ["POST", "/v4/spreadsheets/1ShEeTbUdGeT2026000000000000000000000000ccc:batchUpdate", { requests: [] }],
+      ["GET", "/drive/v3/files/1DoCq3PlAnNiNgNoTeS0000000000000000000000aaa"],
+    ]) {
+      const other = await req(method, path, body);
+      assert.equal(other.status, 418, path);
+      assert.equal(other.body, "not mine");
+    }
   });
 
   it("batchUpdate is atomic: a failing request leaves the deck untouched", async () => {

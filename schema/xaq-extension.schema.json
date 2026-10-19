@@ -302,6 +302,60 @@
                   "pattern": "^[\\x21\\x23-\\x5b\\x5d-\\x7e]+( [\\x21\\x23-\\x5b\\x5d-\\x7e]+)*$"
                 }
               }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "type",
+                "scopes"
+              ],
+              "properties": {
+                "type": {
+                  "const": "google"
+                },
+                "scopes": {
+                  "type": "array",
+                  "minItems": 1,
+                  "maxItems": 50,
+                  "uniqueItems": true,
+                  "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200,
+                    "pattern": "^https://www\\.googleapis\\.com/auth/[A-Za-z0-9._-]{1,150}$"
+                  }
+                },
+                "apis": {
+                  "type": "array",
+                  "maxItems": 20,
+                  "uniqueItems": true,
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "service",
+                      "label"
+                    ],
+                    "properties": {
+                      "service": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 100,
+                        "pattern": "^[a-z0-9-]{1,60}\\.googleapis\\.com$"
+                      },
+                      "label": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 100,
+                        "not": {
+                          "pattern": "\\{\\{|\\}\\}"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
             }
           ]
         },

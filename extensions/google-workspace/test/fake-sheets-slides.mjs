@@ -9,8 +9,11 @@
 // whatever mounts it does that.
 //
 //   const fake = createFakeSheetsSlides();
-//   fake.handle(method, url, body)  -> { status, body } | undefined (not a Sheets/Slides/Drive path)
-//   nodeHandler(fake)               -> async (req, res) => boolean, for mounting on node:http (true when handled)
+//   fake.handle(method, url, body)  -> { status, body } | undefined (not a Sheets/Slides/Drive path); in-process, an
+//                                      unknown id is a Google-shaped 404
+//   fake.claims(method, url)        -> whether it holds what the request names (or it's a create)
+//   nodeHandler(fake)               -> async (req, res) => boolean, for mounting on node:http: answers only what it
+//                                      claims, so W1's fake keeps serving its own fixture files
 //   fakeClient(fake)                -> a GoogleClient-shaped object that calls the fake in-process (unit tests)
 
 import { randomBytes } from "node:crypto";
@@ -296,6 +299,7 @@ function handleSheets(state, method, rest, query, body) {
       ss.sheets.push(sheet);
     });
     state.spreadsheets.set(id, ss);
+    driveEntry(state, id, ss.properties.title, "application/vnd.google-apps.spreadsheet");
     return { status: 200, body: renderSpreadsheet(ss) };
   }
   const [head, ...more] = rest;
@@ -730,6 +734,7 @@ function handleSlides(state, method, rest, body) {
     if (method !== "POST") throw new ApiError(405, "Method not allowed");
     const pr = newPresentation(body?.title ?? "Untitled presentation");
     state.presentations.set(pr.presentationId, pr);
+    driveEntry(state, pr.presentationId, pr.title, "application/vnd.google-apps.presentation");
     return { status: 200, body: renderPresentation(pr) };
   }
   if (rest.length !== 1) throw notFound();
@@ -745,12 +750,27 @@ function handleSlides(state, method, rest, body) {
   return { status: 200, body: renderPresentation(pr) };
 }
 
-function handleDrive(state, method, rest) {
-  if (method !== "GET" || rest.length !== 1) throw notFound();
+/** A file the Sheets or Slides create call made: in My Drive's root, and the app's own (drive.file may change it). */
+function driveEntry(state, id, name, mimeType) {
+  state.driveFiles.set(id, { kind: "drive#file", id, name, mimeType, parents: ["root"], _appCreated: true });
+}
+
+function handleDrive(state, method, rest, query) {
+  if (rest.length !== 1) throw notFound();
   const id = decodeURIComponent(rest[0]);
   const f = state.driveFiles.get(id);
   if (!f) throw new ApiError(404, `File not found: ${id}.`);
-  return { status: 200, body: clone(f) };
+  if (method === "GET") return { status: 200, body: render(f) };
+  if (method !== "PATCH") throw new ApiError(405, "Method not allowed");
+  // files.update, parents only: drive.file lets the app change files it created, nothing else.
+  if (!f._appCreated) throw new ApiError(403, `The user has not granted the app 123456789012 write access to the file ${id}.`);
+  const list = (k) => (query.get(k) ?? "").split(",").map((x) => x.trim()).filter(Boolean);
+  const add = list("addParents");
+  const remove = list("removeParents");
+  for (const p of add) if (!state.folders.has(p)) throw new ApiError(404, `File not found: ${p}.`);
+  for (const p of remove) if (!f.parents.includes(p)) throw bad(`The parent ${p} is not a parent of the file.`);
+  f.parents = [...f.parents.filter((p) => !remove.includes(p)), ...add.filter((p) => !f.parents.includes(p))];
+  return { status: 200, body: { id: f.id, parents: [...f.parents] } };
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -761,6 +781,8 @@ export function createFakeSheetsSlides() {
     spreadsheets: new Map(),
     presentations: new Map(),
     driveFiles: new Map(),
+    /** Drive folders files can be moved into (files.update addParents). */
+    folders: new Set(),
     /** Image URLs createImage fails to fetch. */
     unfetchableImages: new Set(),
     /** Every request: { method, host, path (raw), query (object), body }. */
@@ -775,7 +797,7 @@ export function createFakeSheetsSlides() {
       let route;
       if (segs[0] === "v4" && segs[1] === "spreadsheets") route = () => handleSheets(state, method, segs.slice(2), u.searchParams, body);
       else if (segs[0] === "v1" && segs[1] === "presentations") route = () => handleSlides(state, method, segs.slice(2), body);
-      else if (segs[0] === "drive" && segs[1] === "v3" && segs[2] === "files") route = () => handleDrive(state, method, segs.slice(3));
+      else if (segs[0] === "drive" && segs[1] === "v3" && segs[2] === "files") route = () => handleDrive(state, method, segs.slice(3), u.searchParams);
       else return undefined;
       state.requests.push({ method, host: u.host, path: u.pathname, query: Object.fromEntries(u.searchParams), body: body === undefined ? undefined : clone(body) });
       try {
@@ -784,6 +806,19 @@ export function createFakeSheetsSlides() {
         if (!(err instanceof ApiError)) throw err;
         return { status: err.code, body: { error: { code: err.code, message: err.message, status: err.status } } };
       }
+    },
+    /**
+     * Whether this fake answers the request: a create, or a spreadsheet, presentation or Drive file it holds. Anything
+     * else is left to whoever mounted it (W1's fake serves its own fixture spreadsheets and Drive files).
+     */
+    claims(method, url) {
+      const u = typeof url === "string" ? new URL(url) : url;
+      const segs = u.pathname.split("/").filter(Boolean);
+      const idOf = (s) => decodeURIComponent(s.replace(/:batchUpdate$/, ""));
+      if (segs[0] === "v4" && segs[1] === "spreadsheets") return segs.length === 2 ? method === "POST" : state.spreadsheets.has(idOf(segs[2]));
+      if (segs[0] === "v1" && segs[1] === "presentations") return segs.length === 2 ? method === "POST" : state.presentations.has(idOf(segs[2]));
+      if (segs[0] === "drive" && segs[1] === "v3" && segs[2] === "files") return (method === "GET" || method === "PATCH") && segs.length === 4 && state.driveFiles.has(decodeURIComponent(segs[3]));
+      return false;
     },
     addSpreadsheet: (spec) => seedSpreadsheet(state, spec),
     addPresentation: (pr) => {
@@ -826,13 +861,17 @@ function seedSpreadsheet(state, spec) {
   return ss;
 }
 
-/** For mounting on node:http: handles Sheets/Slides/Drive-files paths and returns true, or returns false untouched. */
+/**
+ * For mounting on node:http, e.g. W1's fake Google through `fake.use(...)`: answers what `claims` accepts and returns
+ * true, or returns false without reading the body. `req.url` is the path (and query) without a host prefix; the
+ * Google host, when the mounting server knows it, comes in the `x-fake-host` header. No token check here: the
+ * mounting server does that first.
+ */
 export function nodeHandler(fake) {
   return async (req, res) => {
-    const url = new URL(req.url, `http://${req.headers.host ?? "127.0.0.1"}`);
-    const segs = url.pathname.split("/").filter(Boolean);
-    const mine = (segs[0] === "v4" && /^spreadsheets/.test(segs[1] ?? "")) || (segs[0] === "v1" && segs[1] === "presentations") || (segs[0] === "drive" && segs[1] === "v3" && segs[2] === "files");
-    if (!mine) return false;
+    const host = req.headers["x-fake-host"] ?? "fake.googleapis.com";
+    const url = new URL(req.url, `https://${host}`);
+    if (!fake.claims(req.method, url)) return false;
     const chunks = [];
     for await (const c of req) chunks.push(c);
     const raw = Buffer.concat(chunks).toString("utf8");

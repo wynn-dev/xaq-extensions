@@ -1,0 +1,18 @@
+xaq google-workspace extension
+
+All code in src/ is new for xaq (MIT, see the repository's LICENSE). The test harness (test/harness.mjs) is adapted
+from extensions/whoop/test/harness.mjs in this repository.
+
+dist/server.mjs bundles these third-party packages (MIT unless noted; full license texts in THIRD_PARTY_LICENSES):
+  @modelcontextprotocol/sdk  Copyright (c) 2024 Anthropic, PBC
+  zod                        Copyright (c) 2025 Colin McDonnell
+  zod-to-json-schema (ISC)   Copyright (c) 2020, Stefan Terdell
+  ajv                        Copyright (c) 2015-2021 Evgeny Poberezkin
+  ajv-formats                Copyright (c) 2020 Evgeny Poberezkin
+  fast-deep-equal            Copyright (c) 2017 Evgeny Poberezkin
+  json-schema-traverse       Copyright (c) 2017 Evgeny Poberezkin
+  fast-uri (BSD-3-Clause)    Copyright (c) 2011-2021, Gary Court until https://github.com/garycourt/uri-js/commit/a1acf730b4bba3f1097c9f52e7d9d3aba8cdcaae
+                             Copyright (c) 2021-present The Fastify team
+
+The test fixtures (test/fixtures/) were written by hand from Google's documented API response shapes; no live Google
+account was used.

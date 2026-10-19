@@ -84,8 +84,8 @@ function defineTests(lib) {
       assert.equal(spreadsheetIdOf(SS), SS);
       assert.equal(spreadsheetIdOf(`https://docs.google.com/spreadsheets/d/${SS}/edit#gid=0`), SS);
       assert.equal(spreadsheetIdOf(`https://docs.google.com/spreadsheets/u/1/d/${SS}`), SS);
-      assert.throws(() => spreadsheetIdOf("../../drive/v3/files"), /spreadsheetId/);
-      assert.throws(() => spreadsheetIdOf(`https://evil.example/spreadsheets/d/${SS}`), /spreadsheetId/);
+      assert.throws(() => spreadsheetIdOf("../../drive/v3/files"), /isn't a Google spreadsheet id/);
+      assert.throws(() => spreadsheetIdOf(`https://evil.example/spreadsheets/d/${SS}`), /isn't a Google spreadsheet id/);
     });
     it("renders a markdown table with the sheet's letters and row numbers, escaping | and newlines", () => {
       assert.equal(markdownTable([["a|b", "x\ny"], [1]], 5, 2), ["| | B | C |", "|---|---|---|", "| 5 | a\\|b | x<br>y |", "| 6 | 1 |  |"].join("\n"));
@@ -251,6 +251,27 @@ function defineTests(lib) {
       assert.deepEqual(out.structured.firstTab, { title: "Sheet1", tabId: 0 });
     });
 
+    it("sheets_create with folderId creates, then moves the file there with Drive files.update", async () => {
+      const FOLDER = "1fOlDeRsCrAtCh000000000000000000aa";
+      fake.state.folders.add(FOLDER);
+      const out = await call("sheets_create", { title: "Filed", folderId: `https://drive.google.com/drive/folders/${FOLDER}` });
+      const id = out.structured.spreadsheetId;
+      assert.deepEqual(fake.state.requests.map((r) => `${r.method} ${r.host}${r.path}`), ["POST sheets.googleapis.com/v4/spreadsheets", `PATCH www.googleapis.com/drive/v3/files/${id}`]);
+      assert.deepEqual(fake.state.requests[1].query, { addParents: FOLDER, removeParents: "root", supportsAllDrives: "true", fields: "id,parents" });
+      assert.deepEqual(fake.state.driveFiles.get(id).parents, [FOLDER]);
+      assert.equal(out.structured.folderId, FOLDER);
+      assert.match(out.text, new RegExp(`in folder ${FOLDER}`));
+      // "root" means My Drive: nothing to move.
+      await call("sheets_create", { title: "Rooted", folderId: "root" });
+      assert.equal(fake.state.requests.at(-1).method, "POST");
+    });
+
+    it("sheets_create refuses a bad folder id before creating, and names the file when the move fails", async () => {
+      await assert.rejects(call("sheets_create", { title: "X", folderId: "not a folder" }), /isn't a Google folder id/);
+      assert.equal(fake.state.requests.length, 0);
+      await assert.rejects(call("sheets_create", { title: "X", folderId: "1fOlDeRgOnE0000000000000000000000bb" }), /Created the spreadsheet https:\/\/docs\.google\.com\/spreadsheets\/d\/\S+ \(id \S+\) in My Drive, but moving it into the folder failed: Google API 404: File not found: 1fOlDeRgOnE/);
+    });
+
     it("sheets_add_tab adds a tab at a position, with its header in the same atomic batch", async () => {
       const out = await call("sheets_add_tab", { spreadsheetId: SS, title: "Summary", position: 1, header: ["Metric", "Value"] });
       assert.equal(out.structured.tab.position, 1);
@@ -310,7 +331,7 @@ function defineTests(lib) {
     it("surfaces API errors (an unknown spreadsheet) and refuses bad ids before any request", async () => {
       await assert.rejects(call("sheets_list_tabs", { spreadsheetId: "1MissingSpreadsheetXXXXXXXXXXXXXXXXXXXXXXXX" }), /404: Requested entity was not found/);
       const before = fake.state.requests.length;
-      await assert.rejects(call("sheets_read", { spreadsheetId: "a/b?c", range: "A1" }), /spreadsheetId/);
+      await assert.rejects(call("sheets_read", { spreadsheetId: "a/b?c", range: "A1" }), /isn't a Google spreadsheet id/);
       await assert.rejects(call("sheets_read", { spreadsheetId: SS, range: "Sheet1!A0" }), /Row 0/);
       assert.equal(fake.state.requests.length, before);
     });

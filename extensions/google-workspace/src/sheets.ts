@@ -5,10 +5,12 @@
 
 import { randomInt } from "node:crypto";
 import { z } from "zod";
-import type { GoogleClient } from "./google.ts";
-import type { ExtTool, ToolOutput } from "./tool.ts";
+import { type GoogleClient, SHEETS } from "./google.ts";
+import { type ExtTool, InputError, type ToolOutput, tool } from "./tool.ts";
+import { afterCreate, folderIdInput, folderIdOf, moveIntoFolder } from "./folders.ts";
+import { fileId } from "./util.ts";
 
-export const SHEETS_BASE = "https://sheets.googleapis.com/v4/spreadsheets";
+export const SHEETS_BASE = `${SHEETS}/spreadsheets`;
 
 // The grid limits of a Google spreadsheet: columns run to ZZZ (18,278), and a spreadsheet holds at most 10 million cells.
 export const MAX_COLUMN = 18_278;
@@ -16,22 +18,12 @@ export const MAX_ROW = 10_000_000;
 const MAX_WRITE_CELLS = 50_000;
 const MAX_TABLE_CELL_CHARS = 200;
 
-function defineTool<S extends z.ZodRawShape>(t: ExtTool<S>): ExtTool {
-  return t as unknown as ExtTool;
-}
-
 // ---------------------------------------------------------------------------------------------------------------------
 // Ids
 
-/** A spreadsheet id, or the id out of a docs.google.com/spreadsheets/d/<id>/… URL. */
+/** A spreadsheet id, or the id out of its Google link (util.fileId). */
 export function spreadsheetIdOf(input: string): string {
-  const s = input.trim();
-  const m = /^https:\/\/docs\.google\.com\/spreadsheets\/(?:u\/\d+\/)?d\/([A-Za-z0-9_-]+)(?:[/?#]|$)/.exec(s);
-  const id = m ? m[1] : s;
-  if (!/^[A-Za-z0-9_-]{10,200}$/.test(id)) {
-    throw new Error("spreadsheetId must be a spreadsheet id (the part after /d/ in its URL) or the spreadsheet's docs.google.com URL.");
-  }
-  return id;
+  return fileId(input, "spreadsheet id");
 }
 
 const enc = encodeURIComponent;
@@ -55,7 +47,7 @@ export function columnNumber(letters: string): number {
 }
 
 export function columnLetters(n: number): string {
-  if (!Number.isInteger(n) || n < 1 || n > MAX_COLUMN) throw new Error(`Column ${n} is out of range (1–${MAX_COLUMN}).`);
+  if (!Number.isInteger(n) || n < 1 || n > MAX_COLUMN) throw new InputError(`Column ${n} is out of range (1–${MAX_COLUMN}).`);
   let s = "";
   while (n > 0) {
     const r = (n - 1) % 26;
@@ -71,13 +63,13 @@ const ROW = /^\$?(\d{1,9})$/;
 
 function col(letters: string): number {
   const n = columnNumber(letters);
-  if (n > MAX_COLUMN) throw new Error(`Column ${letters.toUpperCase()} is past the last possible column (ZZZ).`);
+  if (n > MAX_COLUMN) throw new InputError(`Column ${letters.toUpperCase()} is past the last possible column (ZZZ).`);
   return n;
 }
 
 function row(digits: string): number {
   const n = Number(digits);
-  if (n < 1 || n > MAX_ROW) throw new Error(`Row ${digits} is out of range (rows start at 1).`);
+  if (n < 1 || n > MAX_ROW) throw new InputError(`Row ${digits} is out of range (rows start at 1).`);
   return n;
 }
 
@@ -121,8 +113,8 @@ function parseRef(ref: string): Omit<A1Range, "sheet"> | null {
 }
 
 function checkTabName(name: string): string {
-  if (name.length < 1 || name.length > 100) throw new Error("A tab name is 1 to 100 characters.");
-  if (/[\u0000-\u001f\u007f]/.test(name)) throw new Error("A tab name can't contain control characters.");
+  if (name.length < 1 || name.length > 100) throw new InputError("A tab name is 1 to 100 characters.");
+  if (/[\u0000-\u001f\u007f]/.test(name)) throw new InputError("A tab name can't contain control characters.");
   return name;
 }
 
@@ -136,8 +128,8 @@ function checkTabName(name: string): string {
  */
 export function parseA1(input: string): A1Range {
   const s = input.trim();
-  if (!s) throw new Error("The range is empty. Give A1 notation such as 'Sheet 1'!A1:C10, or a tab name.");
-  if (s.length > 300) throw new Error("The range is too long.");
+  if (!s) throw new InputError("The range is empty. Give A1 notation such as 'Sheet 1'!A1:C10, or a tab name.");
+  if (s.length > 300) throw new InputError("The range is too long.");
   if (s.startsWith("'")) {
     let name = "";
     let i = 1;
@@ -152,13 +144,13 @@ export function parseA1(input: string): A1Range {
       }
       name += s[i];
     }
-    if (i >= s.length) throw new Error(`The quoted tab name in ${s} has no closing quote. Write a quote inside a name as two quotes ('').`);
+    if (i >= s.length) throw new InputError(`The quoted tab name in ${s} has no closing quote. Write a quote inside a name as two quotes ('').`);
     const rest = s.slice(i + 1);
     const sheet = checkTabName(name);
     if (rest === "" || rest === "!") return { sheet };
-    if (!rest.startsWith("!")) throw new Error(`Expected ! after the quoted tab name in ${s}.`);
+    if (!rest.startsWith("!")) throw new InputError(`Expected ! after the quoted tab name in ${s}.`);
     const ref = parseRef(rest.slice(1));
-    if (!ref) throw new Error(`${rest.slice(1)} isn't an A1 range (such as A1, A1:C10, A:C, 2:5 or A2:C).`);
+    if (!ref) throw new InputError(`${rest.slice(1)} isn't an A1 range (such as A1, A1:C10, A:C, 2:5 or A2:C).`);
     return { sheet, ...ref };
   }
   const bang = s.lastIndexOf("!");
@@ -167,12 +159,12 @@ export function parseA1(input: string): A1Range {
     const tail = s.slice(bang + 1);
     if (tail === "") return { sheet };
     const ref = parseRef(tail);
-    if (!ref) throw new Error(`${tail} isn't an A1 range (such as A1, A1:C10, A:C, 2:5 or A2:C). Quote a tab name that contains ! ('My!Tab'!A1).`);
+    if (!ref) throw new InputError(`${tail} isn't an A1 range (such as A1, A1:C10, A:C, 2:5 or A2:C). Quote a tab name that contains ! ('My!Tab'!A1).`);
     return { sheet, ...ref };
   }
   const ref = parseRef(s);
   if (ref) return ref;
-  if (/^[$A-Za-z0-9]*:[$A-Za-z0-9:]*$/.test(s)) throw new Error(`${s} isn't an A1 range (such as A1, A1:C10, A:C, 2:5 or A2:C).`);
+  if (/^[$A-Za-z0-9]*:[$A-Za-z0-9:]*$/.test(s)) throw new InputError(`${s} isn't an A1 range (such as A1, A1:C10, A:C, 2:5 or A2:C).`);
   return { sheet: checkTabName(s) };
 }
 
@@ -194,7 +186,7 @@ export function formatA1(r: A1Range): string {
   } else if (r.startRow !== undefined) {
     ref = `${r.startRow}:${r.endRow ?? r.startRow}`;
   }
-  if (!sheet && !ref) throw new Error("The range names neither a tab nor cells.");
+  if (!sheet && !ref) throw new InputError("The range names neither a tab nor cells.");
   if (!ref) return sheet;
   return sheet ? `${sheet}!${ref}` : ref;
 }
@@ -242,13 +234,13 @@ function spreadsheetUrl(id: string): string {
 
 /** The tab a range names, or the API's default (the first visible tab). Names match exactly, then ignoring case. */
 export function pickTab(tabs: SheetProperties[], name: string | undefined): SheetProperties {
-  if (tabs.length === 0) throw new Error("The spreadsheet has no tabs.");
+  if (tabs.length === 0) throw new InputError("The spreadsheet has no tabs.");
   if (name === undefined) return tabs.find((t) => !t.hidden) ?? tabs[0];
   const exact = tabs.find((t) => t.title === name);
   if (exact) return exact;
   const folded = tabs.filter((t) => t.title.toLowerCase() === name.toLowerCase());
   if (folded.length === 1) return folded[0];
-  throw new Error(`There's no tab named "${name}". The tabs are: ${tabs.map((t) => `"${t.title}"`).join(", ")}.`);
+  throw new InputError(`There's no tab named "${name}". The tabs are: ${tabs.map((t) => `"${t.title}"`).join(", ")}.`);
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -296,7 +288,7 @@ const headerInput = z.array(z.string().max(1000)).min(1).max(1000);
 
 function checkValues(values: unknown[][]): number {
   const cells = values.reduce((n, r) => n + r.length, 0);
-  if (cells > MAX_WRITE_CELLS) throw new Error(`That's ${cells} cells; write at most ${MAX_WRITE_CELLS} per call.`);
+  if (cells > MAX_WRITE_CELLS) throw new InputError(`That's ${cells} cells; write at most ${MAX_WRITE_CELLS} per call.`);
   return cells;
 }
 
@@ -315,7 +307,7 @@ async function batchUpdate(g: GoogleClient, id: string, requests: unknown[]): Pr
 // ---------------------------------------------------------------------------------------------------------------------
 // Tools
 
-const listTabs = defineTool({
+const listTabs = tool({
   name: "sheets_list_tabs",
   title: "List a spreadsheet's tabs",
   description: "Lists a Google Sheets spreadsheet's tabs: title, tab id, position, row and column counts, frozen rows, hidden.",
@@ -347,7 +339,7 @@ const listTabs = defineTool({
 
 const RENDER = { formatted: "FORMATTED_VALUE", unformatted: "UNFORMATTED_VALUE", formula: "FORMULA" } as const;
 
-const read = defineTool({
+const read = tool({
   name: "sheets_read",
   title: "Read cells from a spreadsheet",
   description:
@@ -369,11 +361,11 @@ const read = defineTool({
     const a1 = parseA1(args.range);
     const meta = await getMeta(g, id);
     const tab = pickTab(meta.tabs, a1.sheet);
-    if (tab.sheetType && tab.sheetType !== "GRID") throw new Error(`"${tab.title}" is a ${tab.sheetType.toLowerCase()} tab, which has no cells.`);
+    if (tab.sheetType && tab.sheetType !== "GRID") throw new InputError(`"${tab.title}" is a ${tab.sheetType.toLowerCase()} tab, which has no cells.`);
     const rowCount = tab.gridProperties?.rowCount ?? MAX_ROW;
     const colCount = tab.gridProperties?.columnCount ?? MAX_COLUMN;
     if (a1.startCol !== undefined && a1.startCol > colCount) {
-      throw new Error(`Column ${columnLetters(a1.startCol)} is past the last column of "${tab.title}" (${columnLetters(colCount)}).`);
+      throw new InputError(`Column ${columnLetters(a1.startCol)} is past the last column of "${tab.title}" (${columnLetters(colCount)}).`);
     }
     const maxRows = args.maxRows;
     const firstRow = Math.max(a1.startRow ?? 1, args.fromRow ?? 1);
@@ -416,7 +408,7 @@ interface UpdateResponse {
   updatedCells?: number;
 }
 
-const write = defineTool({
+const write = tool({
   name: "sheets_write",
   title: "Write cells in a spreadsheet",
   description:
@@ -431,10 +423,10 @@ const write = defineTool({
     if (!isSingleCell(a1)) {
       const width = Math.max(...args.values.map((r) => r.length));
       if (a1.startRow !== undefined && a1.endRow !== undefined && args.values.length > a1.endRow - a1.startRow + 1) {
-        throw new Error(`${plural(args.values.length, "row")} of values don't fit in ${formatA1(a1)} (${plural(a1.endRow - a1.startRow + 1, "row")}). Give a bigger range, or just its top-left cell.`);
+        throw new InputError(`${plural(args.values.length, "row")} of values don't fit in ${formatA1(a1)} (${plural(a1.endRow - a1.startRow + 1, "row")}). Give a bigger range, or just its top-left cell.`);
       }
       if (a1.startCol !== undefined && a1.endCol !== undefined && width > a1.endCol - a1.startCol + 1) {
-        throw new Error(`${plural(width, "column")} of values don't fit in ${formatA1(a1)} (${plural(a1.endCol - a1.startCol + 1, "column")}). Give a bigger range, or just its top-left cell.`);
+        throw new InputError(`${plural(width, "column")} of values don't fit in ${formatA1(a1)} (${plural(a1.endCol - a1.startCol + 1, "column")}). Give a bigger range, or just its top-left cell.`);
       }
     }
     const range = formatA1(a1);
@@ -450,7 +442,7 @@ const write = defineTool({
   },
 });
 
-const appendRows = defineTool({
+const appendRows = tool({
   name: "sheets_append_rows",
   title: "Append rows to a table",
   description:
@@ -479,18 +471,20 @@ const appendRows = defineTool({
   },
 });
 
-const create = defineTool({
+const create = tool({
   name: "sheets_create",
   title: "Create a spreadsheet",
-  description: "Creates a Google Sheets spreadsheet in the user's Drive, optionally naming its first tab and giving it a bold, frozen header row. Returns its id and URL.",
+  description: "Creates a Google Sheets spreadsheet in the user's Drive (or in a folder), optionally naming its first tab and giving it a bold, frozen header row. Returns its id and URL.",
   input: {
     title: z.string().min(1).max(500).describe("The spreadsheet's title."),
     tabTitle: z.string().min(1).max(100).optional().describe("The first tab's name (default: Sheets' own, Sheet1)."),
     header: headerInput.optional().describe("Column headings for row 1 of the first tab, in bold."),
     freezeHeader: z.boolean().default(true).describe("Freeze the header row (default true; only with a header)."),
+    folderId: folderIdInput,
   },
   risk: "write",
   async run(args, g): Promise<ToolOutput> {
+    const folder = folderIdOf(args.folderId);
     const sheet: Record<string, unknown> = {};
     const props: Record<string, unknown> = {};
     if (args.tabTitle !== undefined) props.title = checkTabName(args.tabTitle);
@@ -504,14 +498,21 @@ const create = defineTool({
     const res = await g.json<SpreadsheetMeta>("POST", SHEETS_BASE, { body });
     const first = res.sheets?.[0]?.properties;
     const url = res.spreadsheetUrl ?? spreadsheetUrl(res.spreadsheetId);
+    if (folder) {
+      try {
+        await moveIntoFolder(g, res.spreadsheetId, folder);
+      } catch (err) {
+        throw afterCreate(err, `Created the spreadsheet ${url} (id ${res.spreadsheetId}) in My Drive`, "moving it into the folder failed: ");
+      }
+    }
     return {
-      text: `Created "${res.properties?.title ?? args.title}": ${url}${first ? ` (first tab "${first.title}"${args.header ? `, header ${args.header.length} columns` : ""})` : ""}.`,
-      structured: { spreadsheetId: res.spreadsheetId, url, title: res.properties?.title ?? args.title, firstTab: first ? { title: first.title, tabId: first.sheetId } : null },
+      text: `Created "${res.properties?.title ?? args.title}"${folder ? ` in folder ${folder}` : ""}: ${url}${first ? ` (first tab "${first.title}"${args.header ? `, header ${args.header.length} columns` : ""})` : ""}.`,
+      structured: { spreadsheetId: res.spreadsheetId, url, title: res.properties?.title ?? args.title, folderId: folder ?? null, firstTab: first ? { title: first.title, tabId: first.sheetId } : null },
     };
   },
 });
 
-const addTab = defineTool({
+const addTab = tool({
   name: "sheets_add_tab",
   title: "Add a tab to a spreadsheet",
   description: "Adds a tab to a Google Sheets spreadsheet, at a position (default: last), optionally with a bold, frozen header row. Returns its tab id.",
@@ -558,7 +559,7 @@ const addTab = defineTool({
 
 const NUMBER_FORMATS = ["TEXT", "NUMBER", "PERCENT", "CURRENCY", "DATE", "TIME", "DATE_TIME", "SCIENTIFIC"] as const;
 
-const format = defineTool({
+const format = tool({
   name: "sheets_format",
   title: "Format cells in a spreadsheet",
   description:
@@ -585,7 +586,7 @@ const format = defineTool({
     const a1 = parseA1(args.range);
     const wantsCells = args.bold !== undefined || args.italic !== undefined || args.numberFormat !== undefined;
     if (!wantsCells && args.columnWidth === undefined && args.freezeRows === undefined && args.freezeColumns === undefined) {
-      throw new Error("Nothing to format: give bold, italic, numberFormat, columnWidth, freezeRows or freezeColumns.");
+      throw new InputError("Nothing to format: give bold, italic, numberFormat, columnWidth, freezeRows or freezeColumns.");
     }
     const tab = pickTab((await getMeta(g, id)).tabs, a1.sheet);
     const requests: unknown[] = [];
@@ -639,7 +640,7 @@ const format = defineTool({
   },
 });
 
-const clear = defineTool({
+const clear = tool({
   name: "sheets_clear",
   title: "Clear cells in a spreadsheet",
   description: "Clears the values in a range (or a whole tab) of a Google Sheets spreadsheet. Formatting stays. This can't be undone from here (only through the spreadsheet's version history).",
@@ -654,7 +655,7 @@ const clear = defineTool({
   },
 });
 
-const deleteTab = defineTool({
+const deleteTab = tool({
   name: "sheets_delete_tab",
   title: "Delete a tab from a spreadsheet",
   description: "Deletes a tab, and everything on it, from a Google Sheets spreadsheet. A spreadsheet's only tab can't be deleted.",
@@ -665,10 +666,10 @@ const deleteTab = defineTool({
     const id = spreadsheetIdOf(args.spreadsheetId);
     const tabs = (await getMeta(g, id)).tabs;
     const tab = pickTab(tabs, args.tab);
-    if (tabs.length === 1) throw new Error(`"${tab.title}" is the spreadsheet's only tab, and a spreadsheet must keep one.`);
+    if (tabs.length === 1) throw new InputError(`"${tab.title}" is the spreadsheet's only tab, and a spreadsheet must keep one.`);
     await batchUpdate(g, id, [{ deleteSheet: { sheetId: tab.sheetId } }]);
     return { text: `Deleted tab "${tab.title}" (tab id ${tab.sheetId}).`, structured: { spreadsheetId: id, deleted: { title: tab.title, tabId: tab.sheetId } } };
   },
 });
 
-export const sheetsTools: ExtTool[] = [listTabs, read, write, appendRows, create, addTab, format, clear, deleteTab];
+export const sheetsTools = [listTabs, read, write, appendRows, create, addTab, format, clear, deleteTab] as ExtTool[];

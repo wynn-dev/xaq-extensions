@@ -1,0 +1,234 @@
+{
+  "_about": "Hand-written from Google's documented response shapes (Drive API v3 File, FileList, Comment and Reply resources; Docs API v1 Document; Sheets API v4 Spreadsheet and ValueRange; Drive's text/markdown export as Google Docs writes it). No live account was used. The fake (test/fake-google.mjs) serves these.",
+  "user": { "displayName": "Wynn Example", "emailAddress": "wynn@example.com" },
+  "files": [
+    {
+      "kind": "drive#file",
+      "id": "1fOlDeRpLaNnInG0000000000000000aa",
+      "name": "Planning",
+      "mimeType": "application/vnd.google-apps.folder",
+      "parents": ["root"],
+      "createdTime": "2026-06-01T09:00:00.000Z",
+      "modifiedTime": "2026-10-12T15:04:05.123Z",
+      "owners": [{ "kind": "drive#user", "displayName": "Wynn Example", "emailAddress": "wynn@example.com", "me": true, "permissionId": "01234567890123456789" }],
+      "webViewLink": "https://drive.google.com/drive/folders/1fOlDeRpLaNnInG0000000000000000aa"
+    },
+    {
+      "kind": "drive#file",
+      "id": "1DoCq3PlAnNiNgNoTeS0000000000000000000000aaa",
+      "name": "Q3 Planning Notes",
+      "mimeType": "application/vnd.google-apps.document",
+      "parents": ["1fOlDeRpLaNnInG0000000000000000aa"],
+      "description": "Working notes for the Q3 plan",
+      "createdTime": "2026-07-01T10:11:12.000Z",
+      "modifiedTime": "2026-10-12T15:04:05.123Z",
+      "owners": [{ "kind": "drive#user", "displayName": "Wynn Example", "emailAddress": "wynn@example.com", "me": true, "permissionId": "01234567890123456789" }],
+      "lastModifyingUser": { "kind": "drive#user", "displayName": "Priya Raman", "emailAddress": "priya@example.com", "me": false },
+      "webViewLink": "https://docs.google.com/document/d/1DoCq3PlAnNiNgNoTeS0000000000000000000000aaa/edit?usp=drivesdk",
+      "shared": true,
+      "trashed": false,
+      "capabilities": { "canEdit": true, "canComment": true, "canDownload": true },
+      "_text": "goals billing hiring launch checklist"
+    },
+    {
+      "kind": "drive#file",
+      "id": "1DoCoFfSiTeAgEnDa000000000000000000000000bbb",
+      "name": "Team Offsite Agenda",
+      "mimeType": "application/vnd.google-apps.document",
+      "parents": ["root"],
+      "createdTime": "2026-09-01T08:00:00.000Z",
+      "modifiedTime": "2026-09-30T17:45:00.000Z",
+      "owners": [{ "kind": "drive#user", "displayName": "Priya Raman", "emailAddress": "priya@example.com", "me": false }],
+      "lastModifyingUser": { "kind": "drive#user", "displayName": "Priya Raman", "emailAddress": "priya@example.com", "me": false },
+      "webViewLink": "https://docs.google.com/document/d/1DoCoFfSiTeAgEnDa000000000000000000000000bbb/edit?usp=drivesdk",
+      "shared": true,
+      "trashed": false,
+      "capabilities": { "canEdit": true, "canComment": true, "canDownload": true },
+      "_text": "offsite agenda lisbon"
+    },
+    {
+      "kind": "drive#file",
+      "id": "1ShEeTbUdGeT2026000000000000000000000000ccc",
+      "name": "Budget 2026",
+      "mimeType": "application/vnd.google-apps.spreadsheet",
+      "parents": ["1fOlDeRpLaNnInG0000000000000000aa"],
+      "createdTime": "2026-01-05T08:00:00.000Z",
+      "modifiedTime": "2026-10-10T08:30:00.000Z",
+      "owners": [{ "kind": "drive#user", "displayName": "Wynn Example", "emailAddress": "wynn@example.com", "me": true }],
+      "webViewLink": "https://docs.google.com/spreadsheets/d/1ShEeTbUdGeT2026000000000000000000000000ccc/edit?usp=drivesdk",
+      "capabilities": { "canEdit": true, "canComment": true, "canDownload": true },
+      "_text": "budget"
+    },
+    {
+      "kind": "drive#file",
+      "id": "1SlIdEsPrOdUcTrEvIeW00000000000000000000ddd",
+      "name": "Product Review Deck",
+      "mimeType": "application/vnd.google-apps.presentation",
+      "parents": ["root"],
+      "createdTime": "2026-08-20T08:00:00.000Z",
+      "modifiedTime": "2026-10-01T12:00:00.000Z",
+      "owners": [{ "kind": "drive#user", "displayName": "Wynn Example", "emailAddress": "wynn@example.com", "me": true }],
+      "webViewLink": "https://docs.google.com/presentation/d/1SlIdEsPrOdUcTrEvIeW00000000000000000000ddd/edit?usp=drivesdk",
+      "capabilities": { "canEdit": true, "canComment": true, "canDownload": true },
+      "_text": "product review"
+    },
+    {
+      "kind": "drive#file",
+      "id": "1PdFsIgNeDcOnTrAcT00000000000000eee",
+      "name": "Signed Contract.pdf",
+      "mimeType": "application/pdf",
+      "parents": ["root"],
+      "createdTime": "2026-05-02T08:00:00.000Z",
+      "modifiedTime": "2026-05-02T08:00:00.000Z",
+      "size": "482133",
+      "owners": [{ "kind": "drive#user", "displayName": "Wynn Example", "emailAddress": "wynn@example.com", "me": true }],
+      "webViewLink": "https://drive.google.com/file/d/1PdFsIgNeDcOnTrAcT00000000000000eee/view?usp=drivesdk",
+      "capabilities": { "canEdit": true, "canComment": true, "canDownload": true },
+      "_text": "contract signed"
+    },
+    {
+      "kind": "drive#file",
+      "id": "1ShOrTcUtToQ3NoTeS000000000000000fff",
+      "name": "Q3 Planning Notes (shortcut)",
+      "mimeType": "application/vnd.google-apps.shortcut",
+      "parents": ["root"],
+      "createdTime": "2026-07-02T08:00:00.000Z",
+      "modifiedTime": "2026-07-02T08:00:00.000Z",
+      "owners": [{ "kind": "drive#user", "displayName": "Wynn Example", "emailAddress": "wynn@example.com", "me": true }],
+      "webViewLink": "https://drive.google.com/file/d/1ShOrTcUtToQ3NoTeS000000000000000fff/view?usp=drivesdk",
+      "shortcutDetails": { "targetId": "1DoCq3PlAnNiNgNoTeS0000000000000000000000aaa", "targetMimeType": "application/vnd.google-apps.document" }
+    },
+    {
+      "kind": "drive#file",
+      "id": "1EnGrOaDmAp0000000000000000000000ggg",
+      "name": "Eng Roadmap",
+      "mimeType": "application/vnd.google-apps.document",
+      "parents": ["0AsHaReDdRiVe00Uk9PVA"],
+      "driveId": "0AsHaReDdRiVe00Uk9PVA",
+      "createdTime": "2026-03-03T08:00:00.000Z",
+      "modifiedTime": "2026-10-11T09:00:00.000Z",
+      "owners": [],
+      "webViewLink": "https://docs.google.com/document/d/1EnGrOaDmAp0000000000000000000000ggg/edit?usp=drivesdk",
+      "capabilities": { "canEdit": false, "canComment": true, "canDownload": true },
+      "_text": "roadmap planning"
+    },
+    {
+      "kind": "drive#file",
+      "id": "1OlDtRaShEdDoC000000000000000000hhh",
+      "name": "Old Planning Draft",
+      "mimeType": "application/vnd.google-apps.document",
+      "parents": ["root"],
+      "trashed": true,
+      "createdTime": "2025-03-03T08:00:00.000Z",
+      "modifiedTime": "2025-03-04T08:00:00.000Z",
+      "owners": [{ "kind": "drive#user", "displayName": "Wynn Example", "emailAddress": "wynn@example.com", "me": true }],
+      "webViewLink": "https://docs.google.com/document/d/1OlDtRaShEdDoC000000000000000000hhh/edit?usp=drivesdk",
+      "_text": "planning"
+    }
+  ],
+  "docs": {
+    "1DoCq3PlAnNiNgNoTeS0000000000000000000000aaa": {
+      "title": "Q3 Planning Notes",
+      "body": [
+        { "p": "Q3 Planning Notes", "style": "TITLE" },
+        { "p": "Goals", "style": "HEADING_1" },
+        { "p": "Ship the billing revamp", "bullet": { "level": 0, "ordered": false }, "bold": [[9, 16]] },
+        { "p": "Hire two engineers", "bullet": { "level": 0, "ordered": false } },
+        { "p": "Budget", "style": "HEADING_2" },
+        { "table": [["Area", "Owner", "Status"], ["Billing", "Priya", "On track"], ["Hiring", "Wynn", "At risk"]] },
+        { "p": "" },
+        { "p": "Risks", "style": "HEADING_1" },
+        { "p": "See the launch checklist before sign-off.", "link": [[8, 24, "https://example.com/checklist"]] },
+        { "p": "Next steps", "style": "HEADING_1" },
+        { "p": "Review with Priya on Friday." }
+      ],
+      "exportMarkdown": "# Q3 Planning Notes\n\n# Goals\n\n* Ship the **billing** revamp  \n* Hire two engineers\n\n## Budget\n\n| Area | Owner | Status |\n| :---- | :---- | :---- |\n| Billing | Priya | On track |\n| Hiring | Wynn | At risk |\n\n# Risks\n\nSee the [launch checklist](https://example.com/checklist) before sign-off.\n\n![][image1]\n\n# Next steps\n\nReview with Priya on Friday\\.\n\n[image1]: <data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==>\n"
+    },
+    "1DoCoFfSiTeAgEnDa000000000000000000000000bbb": {
+      "title": "Team Offsite Agenda",
+      "body": [
+        { "p": "Offsite: Lisbon", "style": "HEADING_1" },
+        { "p": "Day 1: strategy." },
+        { "p": "Day 2: planning." }
+      ]
+    },
+    "1EnGrOaDmAp0000000000000000000000ggg": {
+      "title": "Eng Roadmap",
+      "body": [{ "p": "Roadmap", "style": "HEADING_1" }, { "p": "H1: platform." }]
+    }
+  },
+  "comments": {
+    "1DoCq3PlAnNiNgNoTeS0000000000000000000000aaa": [
+      {
+        "kind": "drive#comment",
+        "id": "AAAABcDeFgH",
+        "createdTime": "2026-10-11T09:15:00.000Z",
+        "modifiedTime": "2026-10-11T10:02:00.000Z",
+        "author": { "kind": "drive#user", "displayName": "Priya Raman", "me": false, "photoLink": "//lh3.googleusercontent.com/a/default-user" },
+        "htmlContent": "Can we move hiring to Q4?",
+        "content": "Can we move hiring to Q4?",
+        "deleted": false,
+        "resolved": false,
+        "quotedFileContent": { "mimeType": "text/html", "value": "Hire two engineers" },
+        "anchor": "kix.abc123",
+        "replies": [
+          {
+            "kind": "drive#reply",
+            "id": "AAAABcDeFgI",
+            "createdTime": "2026-10-11T10:02:00.000Z",
+            "modifiedTime": "2026-10-11T10:02:00.000Z",
+            "author": { "kind": "drive#user", "displayName": "Wynn Example", "me": true },
+            "htmlContent": "Let&#39;s discuss Friday.",
+            "content": "Let's discuss Friday.",
+            "deleted": false
+          }
+        ]
+      },
+      {
+        "kind": "drive#comment",
+        "id": "AAAABcDeFgJ",
+        "createdTime": "2026-10-09T14:00:00.000Z",
+        "modifiedTime": "2026-10-10T08:00:00.000Z",
+        "author": { "kind": "drive#user", "displayName": "Wynn Example", "me": true },
+        "htmlContent": "Typo fixed?",
+        "content": "Typo fixed?",
+        "deleted": false,
+        "resolved": true,
+        "replies": [
+          {
+            "kind": "drive#reply",
+            "id": "AAAABcDeFgK",
+            "createdTime": "2026-10-10T08:00:00.000Z",
+            "modifiedTime": "2026-10-10T08:00:00.000Z",
+            "author": { "kind": "drive#user", "displayName": "Priya Raman", "me": false },
+            "content": "Yes",
+            "deleted": false,
+            "action": "resolve"
+          }
+        ]
+      },
+      {
+        "kind": "drive#comment",
+        "id": "AAAABcDeFgL",
+        "createdTime": "2026-10-08T14:00:00.000Z",
+        "modifiedTime": "2026-10-08T14:00:00.000Z",
+        "author": { "kind": "drive#user", "displayName": "Priya Raman", "me": false },
+        "deleted": true,
+        "resolved": false,
+        "replies": []
+      }
+    ]
+  },
+  "sheets": {
+    "1ShEeTbUdGeT2026000000000000000000000000ccc": {
+      "tabs": [
+        { "sheetId": 0, "title": "Summary", "values": [["Category", "Q3", "Q4"], ["Travel", "$1,200.00", "$900.00"], ["Software", "$4,310.50", "$4,310.50"]] },
+        { "sheetId": 1849203381, "title": "Q3 Detail", "values": [["Date", "Vendor", "Note"], ["2026-07-03", "Acme, Inc.", "said \"rush\""], ["2026-08-14", "Globex", ""]] },
+        { "sheetId": 77, "title": "Chart1", "sheetType": "OBJECT" }
+      ]
+    }
+  },
+  "slidesText": {
+    "1SlIdEsPrOdUcTrEvIeW00000000000000000000ddd": "Product Review\nOctober 2026\n\nWhat shipped\nBilling revamp\nNew onboarding\n"
+  }
+}

@@ -114,7 +114,7 @@ function defineTests(lib) {
 
     it("validates ids and image URLs", () => {
       assert.equal(presentationIdOf(`https://docs.google.com/presentation/d/${DECK}/edit#slide=id.p`), DECK);
-      assert.throws(() => presentationIdOf("x/../../y"), /presentationId/);
+      assert.throws(() => presentationIdOf("x/../../y"), /isn't a Google presentation id/);
       assert.equal(driveFileIdOf(`https://drive.google.com/file/d/${DRIVE_IMG}/view?usp=sharing`), DRIVE_IMG);
       assert.equal(driveFileIdOf(`https://drive.google.com/open?id=${DRIVE_IMG}`), DRIVE_IMG);
       assert.equal(checkImageUrl(" https://example.com/a.png "), "https://example.com/a.png");
@@ -199,6 +199,18 @@ function defineTests(lib) {
       );
       assert.deepEqual(out.structured.slides.map((x) => x.slideId), read.structured.slides.map((x) => x.slideId));
       assert.equal(out.structured.url, `https://docs.google.com/presentation/d/${id}/edit`);
+    });
+
+    it("slides_create with folderId moves the new deck into the folder before filling it", async () => {
+      const FOLDER = "1fOlDeRsCrAtCh000000000000000000aa";
+      fake.state.folders.add(FOLDER);
+      const out = await call("slides_create", { title: "Filed deck", slides: [{ title: "One" }], folderId: FOLDER });
+      const id = out.structured.presentationId;
+      assert.deepEqual(fake.state.requests.map((r) => `${r.method} ${r.host}${r.path}`).slice(0, 3), ["POST slides.googleapis.com/v1/presentations", `PATCH www.googleapis.com/drive/v3/files/${id}`, `POST slides.googleapis.com/v1/presentations/${id}:batchUpdate`]);
+      assert.equal(fake.state.requests[1].query.removeParents, "root");
+      assert.deepEqual(fake.state.driveFiles.get(id).parents, [FOLDER]);
+      assert.equal(out.structured.folderId, FOLDER);
+      await assert.rejects(call("slides_create", { title: "Lost", slides: [], folderId: "1fOlDeRgOnE0000000000000000000000bb" }), /Created the deck .+ in My Drive, still empty, but moving it into the folder failed: .*404/);
     });
 
     it("slides_create without a title slide deletes the default first slide", async () => {
@@ -326,7 +338,7 @@ function defineTests(lib) {
     it("surfaces an unknown deck and refuses bad ids before any request", async () => {
       await assert.rejects(call("slides_read", { presentationId: "1MissingDeckXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX" }), /404/);
       const n = fake.state.requests.length;
-      await assert.rejects(call("slides_read", { presentationId: "../x" }), /presentationId/);
+      await assert.rejects(call("slides_read", { presentationId: "../x" }), /isn't a Google presentation id/);
       await assert.rejects(call("slides_delete_slide", { presentationId: DECK, slideId: "bad id!" }), /slideId must be/);
       assert.equal(fake.state.requests.length, n);
     });

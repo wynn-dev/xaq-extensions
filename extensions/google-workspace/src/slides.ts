@@ -5,41 +5,29 @@
 
 import { randomBytes } from "node:crypto";
 import { z } from "zod";
-import type { GoogleClient } from "./google.ts";
-import type { ExtTool, ToolOutput } from "./tool.ts";
+import { DRIVE, type GoogleClient, SLIDES } from "./google.ts";
+import { type ExtTool, InputError, type ToolOutput, tool } from "./tool.ts";
+import { afterCreate, folderIdInput, folderIdOf, moveIntoFolder } from "./folders.ts";
+import { fileId } from "./util.ts";
 
-export const SLIDES_BASE = "https://slides.googleapis.com/v1/presentations";
-export const DRIVE_FILES_BASE = "https://www.googleapis.com/drive/v3/files";
+export const SLIDES_BASE = `${SLIDES}/presentations`;
+export const DRIVE_FILES_BASE = `${DRIVE}/files`;
 
 const EMU_PER_PT = 12_700;
 const MAX_READ_CHARS = 100_000;
 const enc = encodeURIComponent;
 
-function defineTool<S extends z.ZodRawShape>(t: ExtTool<S>): ExtTool {
-  return t as unknown as ExtTool;
-}
-
 // ---------------------------------------------------------------------------------------------------------------------
 // Ids
 
-/** A presentation id, or the id out of a docs.google.com/presentation/d/<id>/… URL. */
+/** A presentation id, or the id out of its Google link (util.fileId). */
 export function presentationIdOf(input: string): string {
-  const s = input.trim();
-  const m = /^https:\/\/docs\.google\.com\/presentation\/(?:u\/\d+\/)?d\/([A-Za-z0-9_-]+)(?:[/?#]|$)/.exec(s);
-  const id = m ? m[1] : s;
-  if (!/^[A-Za-z0-9_-]{10,200}$/.test(id)) {
-    throw new Error("presentationId must be a presentation id (the part after /d/ in its URL) or the deck's docs.google.com URL.");
-  }
-  return id;
+  return fileId(input, "presentation id");
 }
 
-/** A Drive file id, or the id out of a drive.google.com/file/d/<id>/… or …/open?id=<id> URL. */
+/** A Drive file id, or the id out of its Google link (util.fileId). */
 export function driveFileIdOf(input: string): string {
-  const s = input.trim();
-  const m = /^https:\/\/drive\.google\.com\/(?:file\/(?:u\/\d+\/)?d\/([A-Za-z0-9_-]+)(?:[/?#]|$)|open\?id=([A-Za-z0-9_-]+)(?:&|$))/.exec(s);
-  const id = m ? (m[1] ?? m[2]) : s;
-  if (!/^[A-Za-z0-9_-]{10,200}$/.test(id)) throw new Error("driveFileId must be a Drive file id or its drive.google.com URL.");
-  return id;
+  return fileId(input, "Drive file id");
 }
 
 // Existing object ids: Google's own can be as short as "p" (the first slide of a new deck).
@@ -47,7 +35,7 @@ const EXISTING_ID = /^[A-Za-z0-9_][A-Za-z0-9_\-:]{0,49}$/;
 
 function objectIdOf(input: string, what: string): string {
   const s = input.trim();
-  if (!EXISTING_ID.test(s)) throw new Error(`${what} must be a slide object id as slides_read lists it (letters, digits, _ - :, at most 50).`);
+  if (!EXISTING_ID.test(s)) throw new InputError(`${what} must be a slide object id as slides_read lists it (letters, digits, _ - :, at most 50).`);
   return s;
 }
 
@@ -110,7 +98,7 @@ async function batchUpdate(g: GoogleClient, id: string, requests: unknown[]): Pr
 function slideIndex(deck: Presentation, slideId: string): number {
   const ids = (deck.slides ?? []).map((s) => s.objectId);
   const i = ids.indexOf(slideId);
-  if (i < 0) throw new Error(`There's no slide ${slideId} in the deck. Its slides are: ${ids.join(", ") || "(none)"}.`);
+  if (i < 0) throw new InputError(`There's no slide ${slideId} in the deck. Its slides are: ${ids.join(", ") || "(none)"}.`);
   return i;
 }
 
@@ -252,7 +240,7 @@ async function fillNotes(g: GoogleClient, id: string, wanted: { slideId: string;
   const requests: unknown[] = [];
   for (const w of todo) {
     const shapeId = byId.get(w.slideId);
-    if (!shapeId) throw new Error(`slide ${w.slideId} has no speaker notes box to write into`);
+    if (!shapeId) throw new InputError(`slide ${w.slideId} has no speaker notes box to write into`);
     // The notes shape may not exist yet; inserting into its id creates it (documented on NotesProperties).
     requests.push({ insertText: { objectId: shapeId, insertionIndex: 0, text: w.notes } });
   }
@@ -269,17 +257,17 @@ async function fillNotes(g: GoogleClient, id: string, wanted: { slideId: string;
  */
 export function checkImageUrl(raw: string): string {
   const s = raw.trim();
-  if (s.length > 2048) throw new Error("The image URL is longer than the 2 KB Google accepts.");
+  if (s.length > 2048) throw new InputError("The image URL is longer than the 2 KB Google accepts.");
   let u: URL;
   try {
     u = new URL(s);
   } catch {
-    throw new Error("imageUrl isn't a URL.");
+    throw new InputError("imageUrl isn't a URL.");
   }
-  if (u.protocol !== "https:") throw new Error("imageUrl must be an https:// URL.");
-  if (u.username || u.password) throw new Error("imageUrl can't carry a user name or password.");
+  if (u.protocol !== "https:") throw new InputError("imageUrl must be an https:// URL.");
+  if (u.username || u.password) throw new InputError("imageUrl can't carry a user name or password.");
   if (!u.hostname.includes(".") || u.hostname === "localhost" || u.hostname.endsWith(".localhost")) {
-    throw new Error("imageUrl must be a public https URL: Google's servers fetch it.");
+    throw new InputError("imageUrl must be a public https URL: Google's servers fetch it.");
   }
   return u.href;
 }
@@ -344,17 +332,17 @@ async function driveImageUrl(g: GoogleClient, fileId: string): Promise<{ url: st
     query: { fields: "id,name,mimeType,size,thumbnailLink", supportsAllDrives: true },
   });
   const name = f.name ?? fileId;
-  if (!f.mimeType || !IMAGE_TYPES.has(f.mimeType)) throw new Error(`"${name}" is ${f.mimeType ?? "of an unknown type"}; Slides takes PNG, JPEG or GIF images.`);
-  if (f.size !== undefined && Number(f.size) >= 50 * 1024 * 1024) throw new Error(`"${name}" is over the 50 MB Slides accepts.`);
-  if (!f.thumbnailLink) throw new Error(`Drive has no image link for "${name}" yet (it may still be processing). Try again shortly, or pass a public https imageUrl.`);
+  if (!f.mimeType || !IMAGE_TYPES.has(f.mimeType)) throw new InputError(`"${name}" is ${f.mimeType ?? "of an unknown type"}; Slides takes PNG, JPEG or GIF images.`);
+  if (f.size !== undefined && Number(f.size) >= 50 * 1024 * 1024) throw new InputError(`"${name}" is over the 50 MB Slides accepts.`);
+  if (!f.thumbnailLink) throw new InputError(`Drive has no image link for "${name}" yet (it may still be processing). Try again shortly, or pass a public https imageUrl.`);
   let link: URL;
   try {
     link = new URL(f.thumbnailLink);
   } catch {
-    throw new Error(`Drive returned an unusable image link for "${name}".`);
+    throw new InputError(`Drive returned an unusable image link for "${name}".`);
   }
   if (link.protocol !== "https:" || !(link.hostname === "googleusercontent.com" || link.hostname.endsWith(".googleusercontent.com"))) {
-    throw new Error(`Drive returned an unexpected image link for "${name}".`);
+    throw new InputError(`Drive returned an unexpected image link for "${name}".`);
   }
   const sized = link.href.replace(/=s\d+$/, "=s1600");
   return { url: sized, name };
@@ -382,7 +370,7 @@ const READ_FIELDS = "presentationId,title,revisionId,slides(objectId,pageElement
 // ---------------------------------------------------------------------------------------------------------------------
 // Tools
 
-const read = defineTool({
+const read = tool({
   name: "slides_read",
   title: "Read a slide deck",
   description: "Reads a Google Slides deck: each slide's object id, title, body text (bullets, text boxes, tables) and speaker notes. Optionally only some slides.",
@@ -427,24 +415,33 @@ const read = defineTool({
   },
 });
 
-const create = defineTool({
+const create = tool({
   name: "slides_create",
   title: "Create a slide deck from an outline",
   description:
-    "Creates a Google Slides deck in the user's Drive from an outline: a title slide (the deck title, optional subtitle), then one Title-and-body slide per outline item, with its bullets and speaker notes. Returns the deck's id, URL and slide ids.",
+    "Creates a Google Slides deck in the user's Drive (or in a folder) from an outline: a title slide (the deck title, optional subtitle), then one Title-and-body slide per outline item, with its bullets and speaker notes. Returns the deck's id, URL and slide ids.",
   input: {
     title: z.string().min(1).max(500).describe("The deck's title (also on the title slide)."),
     subtitle: z.string().max(500).optional().describe("The title slide's subtitle."),
     slides: z.array(outlineSlide).max(100).describe("The outline: one { title, bullets?, notes? } per slide."),
     titleSlide: z.boolean().default(true).describe("Keep a title slide first (default true)."),
+    folderId: folderIdInput,
   },
   risk: "write",
   async run(args, g): Promise<ToolOutput> {
-    if (!args.titleSlide && args.slides.length === 0) throw new Error("Give at least one slide, or keep the title slide.");
+    if (!args.titleSlide && args.slides.length === 0) throw new InputError("Give at least one slide, or keep the title slide.");
+    const folder = folderIdOf(args.folderId);
     const created = await g.json<Presentation>("POST", SLIDES_BASE, { body: { title: args.title } });
     const id = created.presentationId;
     const url = deckUrl(id);
     const made: { position: number; slideId: string; title: string }[] = [];
+    if (folder) {
+      try {
+        await moveIntoFolder(g, id, folder);
+      } catch (err) {
+        throw afterCreate(err, `Created the deck ${url} (id ${id}) in My Drive, still empty`, "moving it into the folder failed: ");
+      }
+    }
     try {
       const requests: Record<string, unknown>[] = [];
       const first = created.slides?.[0];
@@ -469,16 +466,16 @@ const create = defineTool({
       if (requests.length) await batchUpdate(g, id, requests);
       await fillNotes(g, id, notes);
     } catch (err) {
-      throw new Error(`Created the deck ${url} (id ${id}), but filling it in failed: ${(err as Error)?.message ?? String(err)}`);
+      throw afterCreate(err, `Created the deck ${url} (id ${id})${folder ? ` in folder ${folder}` : ""}`, "filling it in failed: ");
     }
     return {
-      text: [`Created "${args.title}" with ${plural(made.length, "slide")}: ${url}`, ...made.map((m) => `${m.position}. ${m.title || "(no title)"} [id ${m.slideId}]`)].join("\n"),
-      structured: { presentationId: id, url, title: args.title, slides: made },
+      text: [`Created "${args.title}"${folder ? ` in folder ${folder}` : ""} with ${plural(made.length, "slide")}: ${url}`, ...made.map((m) => `${m.position}. ${m.title || "(no title)"} [id ${m.slideId}]`)].join("\n"),
+      structured: { presentationId: id, url, title: args.title, folderId: folder ?? null, slides: made },
     };
   },
 });
 
-const addSlide = defineTool({
+const addSlide = tool({
   name: "slides_add_slide",
   title: "Add a slide to a deck",
   description: "Adds a Title-and-body slide to a Google Slides deck from one outline item (title, bullets, speaker notes), at a 1-based position (default: last). Returns its slide id.",
@@ -495,7 +492,7 @@ const addSlide = defineTool({
     const id = presentationIdOf(args.presentationId);
     const deck = await getDeck(g, id, "presentationId,slides.objectId");
     const count = deck.slides?.length ?? 0;
-    if (args.position !== undefined && args.position > count + 1) throw new Error(`The deck has ${plural(count, "slide")}, so position can be 1 to ${count + 1}.`);
+    if (args.position !== undefined && args.position > count + 1) throw new InputError(`The deck has ${plural(count, "slide")}, so position can be 1 to ${count + 1}.`);
     const ids = outlineIds();
     await batchUpdate(g, id, outlineSlideRequests(args, ids, args.position === undefined ? undefined : args.position - 1));
     if (args.notes) await fillNotes(g, id, [{ slideId: ids.slide, notes: args.notes }]);
@@ -504,7 +501,7 @@ const addSlide = defineTool({
   },
 });
 
-const duplicateSlide = defineTool({
+const duplicateSlide = tool({
   name: "slides_duplicate_slide",
   title: "Duplicate a slide",
   description: "Duplicates a slide of a Google Slides deck. The copy goes right after the original, or at a 1-based position. Returns the copy's slide id.",
@@ -521,7 +518,7 @@ const duplicateSlide = defineTool({
     const deck = await getDeck(g, id, "presentationId,slides.objectId");
     const from = slideIndex(deck, slideId);
     const total = (deck.slides?.length ?? 0) + 1;
-    if (args.position !== undefined && args.position > total) throw new Error(`With the copy the deck has ${plural(total, "slide")}, so position can be 1 to ${total}.`);
+    if (args.position !== undefined && args.position > total) throw new InputError(`With the copy the deck has ${plural(total, "slide")}, so position can be 1 to ${total}.`);
     const copy = newObjectId("copy");
     const requests: unknown[] = [{ duplicateObject: { objectId: slideId, objectIds: { [slideId]: copy } } }];
     const landed = from + 1; // 0-based index of the copy, right after the original
@@ -535,7 +532,7 @@ const duplicateSlide = defineTool({
   },
 });
 
-const deleteSlide = defineTool({
+const deleteSlide = tool({
   name: "slides_delete_slide",
   title: "Delete a slide",
   description: "Deletes a slide, with everything on it and its speaker notes, from a Google Slides deck. Only the deck's version history can bring it back.",
@@ -559,7 +556,7 @@ const deleteSlide = defineTool({
   },
 });
 
-const replaceText = defineTool({
+const replaceText = tool({
   name: "slides_replace_text",
   title: "Find and replace text in a deck",
   description: "Replaces every occurrence of some text in a Google Slides deck (shapes and tables), or only on the given slides. Returns how many occurrences changed.",
@@ -585,7 +582,7 @@ const replaceText = defineTool({
   },
 });
 
-const insertImage = defineTool({
+const insertImage = tool({
   name: "slides_insert_image",
   title: "Insert an image on a slide",
   description:
@@ -606,7 +603,7 @@ const insertImage = defineTool({
   async run(args, g): Promise<ToolOutput> {
     const id = presentationIdOf(args.presentationId);
     const slideId = objectIdOf(args.slideId, "slideId");
-    if ((args.imageUrl === undefined) === (args.driveFileId === undefined)) throw new Error("Give exactly one of imageUrl and driveFileId.");
+    if ((args.imageUrl === undefined) === (args.driveFileId === undefined)) throw new InputError("Give exactly one of imageUrl and driveFileId.");
     const url = args.imageUrl !== undefined ? checkImageUrl(args.imageUrl) : undefined;
     const fileId = args.driveFileId !== undefined ? driveFileIdOf(args.driveFileId) : undefined;
     const deck = await getDeck(g, id, "presentationId,pageSize,slides.objectId");
@@ -625,4 +622,4 @@ const insertImage = defineTool({
   },
 });
 
-export const slidesTools: ExtTool[] = [read, create, addSlide, duplicateSlide, deleteSlide, replaceText, insertImage];
+export const slidesTools = [read, create, addSlide, duplicateSlide, deleteSlide, replaceText, insertImage] as ExtTool[];
