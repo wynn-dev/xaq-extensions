@@ -10,8 +10,7 @@ import { exportText, getFile, person, type DriveUser } from "./drive.ts";
 import { type Position, docUrl, loadDoc, resolveAnchor, writeBlocks } from "./docs-write.ts";
 import { headingsOf, parseMarkdown, stripDataImages } from "./markdown.ts";
 import { InputError, tool } from "./tool.ts";
-import { MIME, fileId, pageText, typeName } from "./util.ts";
-import { randomBytes } from "node:crypto";
+import { MIME, fileId, multipart, pageText, typeName } from "./util.ts";
 
 const docArg = z.string().min(1).max(2048).describe("The Google Doc: its id, or its link.");
 const markdownArg = z.string().max(1_000_000);
@@ -24,16 +23,6 @@ async function requireDoc(g: GoogleClient, id: string) {
     throw new InputError(`"${f.name}" is a ${typeName(f.mimeType)}, not a Google Doc.${hint}`);
   }
   return f;
-}
-
-/** One multipart/related body: JSON metadata, then the media (Drive's multipart upload). */
-export function multipart(metadata: unknown, media: string, mediaType: string): { body: Buffer; contentType: string } {
-  const boundary = `xaq-${randomBytes(12).toString("hex")}`;
-  const body = Buffer.from(
-    `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(metadata)}\r\n` + `--${boundary}\r\nContent-Type: ${mediaType}\r\n\r\n${media}\r\n--${boundary}--\r\n`,
-    "utf8",
-  );
-  return { body, contentType: `multipart/related; boundary=${boundary}` };
 }
 
 const writeSummary = (verb: string, title: string, id: string, r: { paragraphs: number; tables: number }) =>

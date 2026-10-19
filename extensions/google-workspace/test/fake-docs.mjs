@@ -318,7 +318,10 @@ export class FakeDoc {
       return out;
     };
     const lines = [];
+    let inList = false;
     for (const e of this.body) {
+      if (inList && !e.bullet) lines.push("");
+      inList = !!e.bullet && !e.table;
       if (e.table) {
         const rows = e.table.map((row) => `| ${row.map((cell) => cell.map(inline).join(" ").replace(/\*\*(.*?)\*\*/g, "$1")).join(" | ")} |`);
         lines.push(rows[0], `| ${e.table[0].map(() => ":---").join(" | ")} |`, ...rows.slice(1), "");

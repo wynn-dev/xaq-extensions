@@ -1,6 +1,7 @@
 // Small helpers shared by every tool module: file ids (an id or a Google URL that contains one), text paging, CSV,
 // dates and Drive's MIME types.
 
+import { randomBytes } from "node:crypto";
 import { InputError } from "./tool.ts";
 
 export const MIME = {
@@ -106,6 +107,55 @@ export function sizeText(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+/**
+ * One multipart/related body for Drive's multipart upload: JSON metadata, then the media as raw bytes (a string is
+ * sent as UTF-8). The boundary is random, so it can't occur in the media by chance.
+ */
+export function multipart(metadata: unknown, media: string | Buffer, mediaType: string): { body: Buffer; contentType: string } {
+  const boundary = `xaq-${randomBytes(12).toString("hex")}`;
+  const body = Buffer.concat([
+    Buffer.from(`--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(metadata)}\r\n--${boundary}\r\nContent-Type: ${mediaType}\r\n\r\n`, "utf8"),
+    typeof media === "string" ? Buffer.from(media, "utf8") : media,
+    Buffer.from(`\r\n--${boundary}--\r\n`, "utf8"),
+  ]);
+  return { body, contentType: `multipart/related; boundary=${boundary}` };
+}
+
+const BY_EXTENSION: Record<string, string> = {
+  png: "image/png",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  gif: "image/gif",
+  webp: "image/webp",
+  svg: "image/svg+xml",
+  pdf: "application/pdf",
+  txt: "text/plain",
+  md: "text/markdown",
+  csv: "text/csv",
+  tsv: "text/tab-separated-values",
+  html: "text/html",
+  htm: "text/html",
+  json: "application/json",
+  xml: "application/xml",
+  zip: "application/zip",
+  mp3: "audio/mpeg",
+  mp4: "video/mp4",
+  docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  doc: "application/msword",
+  xls: "application/vnd.ms-excel",
+  ppt: "application/vnd.ms-powerpoint",
+  odt: "application/vnd.oasis.opendocument.text",
+  rtf: "application/rtf",
+};
+
+/** A MIME type from a file name's extension, or application/octet-stream. */
+export function mimeFromName(name: string): string {
+  const ext = /\.([A-Za-z0-9]{1,8})$/.exec(name.trim())?.[1]?.toLowerCase();
+  return (ext && BY_EXTENSION[ext]) || "application/octet-stream";
 }
 
 /** A Drive search string literal: single quotes and backslashes escaped. */

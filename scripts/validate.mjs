@@ -9,7 +9,9 @@
 //
 // schema/xaq-extension.schema.json is xaq's MANIFEST_JSON_SCHEMA (server/extensions/manifest.ts, added in
 // wynn-dev/xaq#80), copied verbatim. xaq's validateManifest also checks what a schema can't (template variables,
-// unique step ids, …); when the two disagree, xaq wins: copy the schema again.
+// unique step ids, …); when the two disagree, xaq wins: copy the schema again. Ahead of core for now: the
+// `code.auth` branch `{ "type": "google", "scopes": [...], "apis": [{ "service", "label" }] }` (google-workspace),
+// added here first; core's schema is to match it.
 
 import { existsSync, lstatSync, readdirSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";

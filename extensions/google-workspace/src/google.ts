@@ -207,7 +207,7 @@ export function classify(status: number, body: GoogleErrorBody, service: string)
     return {
       error: new GoogleError(
         "no_file_access",
-        "Google lets this extension change a file through Drive only if the extension created it (it asks for Drive's per-file access, drive.file, not full Drive access). Reading works for every file; for this change, use a file the extension created, or make the edit in Google Docs.",
+        "Google lets this extension change a file through Drive (comment on it, move it to the Trash) only if the extension created it: it has Drive's per-file access (drive.file), not full Drive access. Reading works for every file. Use a file the extension created, or do this in Google Drive yourself.",
         status,
       ),
       retry: false,
