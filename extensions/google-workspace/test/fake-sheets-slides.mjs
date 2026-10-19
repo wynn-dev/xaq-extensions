@@ -576,7 +576,7 @@ function slidesBatch(state, pr, requests) {
       case "createSlide": {
         checkNewId(r.objectId, where);
         const layout = r.slideLayoutReference?.predefinedLayout ?? (r.slideLayoutReference ? undefined : "BLANK");
-        if (!layout || !(layout in LAYOUTS)) throw bad(`Invalid ${where}: The layout ${layout ?? JSON.stringify(r.slideLayoutReference)} is not present in the current master.`);
+        if (!layout || !(layout in LAYOUTS) || work._missingLayouts?.includes(layout)) throw bad(`Invalid ${where}: The layout ${layout ?? JSON.stringify(r.slideLayoutReference)} is not present in the current master.`);
         const mappings = r.placeholderIdMappings ?? [];
         if (mappings.length && !r.slideLayoutReference) throw bad(`Invalid ${where}: placeholderIdMappings can only be used with slideLayoutReference.`);
         for (const m of mappings) {
@@ -697,7 +697,9 @@ function slidesBatch(state, pr, requests) {
         checkNewId(r.objectId, where);
         const url = r.url;
         if (typeof url !== "string" || !url.startsWith("https://") || url.length > 2048) throw bad(`Invalid ${where}: The provided image URL is invalid or not publicly accessible.`);
-        if (state.unfetchableImages.has(url)) throw bad(`Invalid ${where}: There was a problem retrieving the image. The provided image should be publicly accessible, within size limit, and in supported formats.`);
+        // Slides fetches the image without credentials: a Drive link works only for a file shared with "anyone", and a
+        // Drive thumbnail link (drive-storage) never does.
+        if (state.unfetchableImages.has(url) || !publiclyFetchable(state, url)) throw bad(`Invalid ${where}: There was a problem retrieving the image. The provided image should be publicly accessible, within size limit, and in supported formats.`);
         const ep = r.elementProperties ?? {};
         const slide = work.slides.find((s) => s.objectId === ep.pageObjectId);
         if (!slide) throw bad(`Invalid ${where}: The page (${ep.pageObjectId}) could not be found.`);
@@ -712,6 +714,17 @@ function slidesBatch(state, pr, requests) {
   work.revisionId = randomBytes(8).toString("base64url");
   Object.assign(pr, work);
   return { presentationId: pr.presentationId, replies, writeControl: { requiredRevisionId: pr.revisionId } };
+}
+
+/** Whether Google could fetch an image URL without signing in, as far as the fake knows: Drive-hosted ones only when public. */
+function publiclyFetchable(state, url) {
+  const u = new URL(url);
+  if (u.hostname.endsWith("googleusercontent.com") && u.pathname.startsWith("/drive-storage/")) return false;
+  if (u.hostname !== "drive.google.com") return true;
+  const id = u.searchParams.get("id") ?? /\/d\/([A-Za-z0-9_-]+)/.exec(u.pathname)?.[1];
+  const f = id && state.driveFiles.get(id);
+  if (!f || !(f._permissions ?? f.permissions ?? []).some((p) => p.type === "anyone")) return false;
+  return !f.resourceKey || u.searchParams.get("resourcekey") === f.resourceKey;
 }
 
 function newPresentation(title) {

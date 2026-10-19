@@ -71,6 +71,16 @@ describe("Sheets and Slides tools in the spawned extension", () => {
     const url = await s.call("slides_insert_image", { presentationId: "1MissingDeckXXXXXXXXXXXXXXXXXXXXXXXXX", slideId: "p", imageUrl: "http://example.com/a.png" });
     assert.equal(url.isError, true);
     assert.equal(url.text, "imageUrl must be an https:// URL.");
+    // A private Drive image: refused before Slides is called; with its permissions hidden, Slides' 400 says the same.
+    const deck = await s.call("slides_create", { title: "Images", slides: [] });
+    const img = "1PrIvAtEiMaGe00000000000000000000aa";
+    mine.state.driveFiles.set(img, { id: img, name: "private.png", mimeType: "image/png", permissions: [{ type: "user", role: "owner" }] });
+    const priv = await s.call("slides_insert_image", { presentationId: deck.structured.presentationId, slideId: "p", driveFileId: img });
+    assert.equal(priv.isError, true);
+    assert.match(priv.text, /^This image isn't shared publicly, and Slides can only insert public images/);
+    mine.state.driveFiles.set(img, { id: img, name: "private.png", mimeType: "image/png", _permissions: [{ type: "user", role: "owner" }] });
+    const hidden = await s.call("slides_insert_image", { presentationId: deck.structured.presentationId, slideId: "p", driveFileId: img });
+    assert.equal(hidden.text, priv.text);
     const missing = await s.call("slides_read", { presentationId: "1MissingDeckXXXXXXXXXXXXXXXXXXXXXXXXX" });
     assert.equal(missing.isError, true);
     assert.doesNotMatch(missing.text, /failed unexpectedly/);

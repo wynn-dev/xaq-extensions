@@ -222,6 +222,15 @@ export function outlineSlideRequests(item: OutlineSlide, ids: OutlineIds, insert
   return requests;
 }
 
+export const NO_LAYOUT =
+  "This deck's theme has no \"Title and body\" layout, which outline slides are built on. Instead, copy a slide that has the layout you want with slides_duplicate_slide and change its text with slides_replace_text.";
+
+/** Slides' refusal of the predefined TITLE_AND_BODY layout (a theme without it), in plain words; any other error as it was. */
+export function layoutError(err: unknown): unknown {
+  const e = err as { status?: number; message?: string };
+  return e?.status === 400 && /layout/i.test(e.message ?? "") ? new InputError(NO_LAYOUT) : err;
+}
+
 export function outlineIds(): OutlineIds {
   const slide = newObjectId("slide");
   return { slide, title: `${slide}_title`, body: `${slide}_body` };
@@ -323,29 +332,48 @@ export function createImageRequest(objectId: string, url: string, slideId: strin
 
 const IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/gif"]);
 
+export const NOT_PUBLIC =
+  "This image isn't shared publicly, and Slides can only insert public images (Google fetches them without signing in). Use an https imageUrl, or share the file as \"anyone with the link\" in Google Drive yourself: this extension never changes sharing.";
+
+interface DriveImage {
+  id?: string;
+  name?: string;
+  mimeType?: string;
+  size?: string;
+  resourceKey?: string;
+  permissions?: { type?: string; role?: string }[];
+}
+
 /**
- * The URL to give Google for a Drive image: the file's Drive thumbnail link, a short-lived URL Drive issues to
- * whoever can read the file, sized up to 1600 px on the long side. That way the file needn't be shared publicly.
+ * The URL to give Google for a Drive image: its public download link, which works only for a file shared as "anyone
+ * with the link" (Slides fetches images without credentials). Drive lists a file's permissions only to someone who
+ * can share it; when it does and none is "anyone", the file is refused here, before Slides is called. Otherwise
+ * Slides' own refusal is mapped to the same message (imageError).
  */
-async function driveImageUrl(g: GoogleClient, fileId: string): Promise<{ url: string; name: string }> {
-  const f = await g.json<{ id?: string; name?: string; mimeType?: string; size?: string; thumbnailLink?: string }>("GET", `${DRIVE_FILES_BASE}/${enc(fileId)}`, {
-    query: { fields: "id,name,mimeType,size,thumbnailLink", supportsAllDrives: true },
+export async function driveImageUrl(g: GoogleClient, fileId: string): Promise<{ url: string; name: string }> {
+  const f = await g.json<DriveImage>("GET", `${DRIVE_FILES_BASE}/${enc(fileId)}`, {
+    query: { fields: "id,name,mimeType,size,resourceKey,permissions(type,role)", supportsAllDrives: true },
   });
   const name = f.name ?? fileId;
   if (!f.mimeType || !IMAGE_TYPES.has(f.mimeType)) throw new InputError(`"${name}" is ${f.mimeType ?? "of an unknown type"}; Slides takes PNG, JPEG or GIF images.`);
   if (f.size !== undefined && Number(f.size) >= 50 * 1024 * 1024) throw new InputError(`"${name}" is over the 50 MB Slides accepts.`);
-  if (!f.thumbnailLink) throw new InputError(`Drive has no image link for "${name}" yet (it may still be processing). Try again shortly, or pass a public https imageUrl.`);
-  let link: URL;
-  try {
-    link = new URL(f.thumbnailLink);
-  } catch {
-    throw new InputError(`Drive returned an unusable image link for "${name}".`);
+  if (f.permissions && !f.permissions.some((p) => p.type === "anyone")) throw new InputError(NOT_PUBLIC);
+  let url = `https://drive.google.com/uc?export=download&id=${enc(f.id ?? fileId)}`;
+  if (f.resourceKey) url += `&resourcekey=${enc(f.resourceKey)}`;
+  return { url, name };
+}
+
+/** Slides' refusal to fetch an image, in plain words; any other error as it was. */
+export function imageError(err: unknown, fromDrive: boolean): unknown {
+  const e = err as { status?: number; message?: string };
+  if (e?.status === 400 && /publicly accessible|retriev/i.test(e.message ?? "")) {
+    return new InputError(
+      fromDrive
+        ? NOT_PUBLIC
+        : "Google couldn't fetch that image. The URL must be public (no sign-in or cookies), and the image PNG, JPEG or GIF, under 50 MB and 25 megapixels.",
+    );
   }
-  if (link.protocol !== "https:" || !(link.hostname === "googleusercontent.com" || link.hostname.endsWith(".googleusercontent.com"))) {
-    throw new InputError(`Drive returned an unexpected image link for "${name}".`);
-  }
-  const sized = link.href.replace(/=s\d+$/, "=s1600");
-  return { url: sized, name };
+  return err;
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -463,7 +491,7 @@ const create = tool({
         if (item.notes) notes.push({ slideId: ids.slide, notes: item.notes });
       }
       if (first && !args.titleSlide) requests.push({ deleteObject: { objectId: first.objectId } });
-      if (requests.length) await batchUpdate(g, id, requests);
+      if (requests.length) await batchUpdate(g, id, requests).catch((err) => Promise.reject(layoutError(err)));
       await fillNotes(g, id, notes);
     } catch (err) {
       throw afterCreate(err, `Created the deck ${url} (id ${id})${folder ? ` in folder ${folder}` : ""}`, "filling it in failed: ");
@@ -494,7 +522,7 @@ const addSlide = tool({
     const count = deck.slides?.length ?? 0;
     if (args.position !== undefined && args.position > count + 1) throw new InputError(`The deck has ${plural(count, "slide")}, so position can be 1 to ${count + 1}.`);
     const ids = outlineIds();
-    await batchUpdate(g, id, outlineSlideRequests(args, ids, args.position === undefined ? undefined : args.position - 1));
+    await batchUpdate(g, id, outlineSlideRequests(args, ids, args.position === undefined ? undefined : args.position - 1)).catch((err) => Promise.reject(layoutError(err)));
     if (args.notes) await fillNotes(g, id, [{ slideId: ids.slide, notes: args.notes }]);
     const position = args.position ?? count + 1;
     return { text: `Added slide ${position} "${cleanLine(args.title) || "(no title)"}" [id ${ids.slide}].`, structured: { presentationId: id, slideId: ids.slide, position } };
@@ -586,12 +614,12 @@ const insertImage = tool({
   name: "slides_insert_image",
   title: "Insert an image on a slide",
   description:
-    "Puts an image on a slide of a Google Slides deck, from a public https URL or a Drive file id. Google's servers fetch the image (the extension never does), once, at insertion: a URL must be publicly reachable, and the image PNG, JPEG or GIF, under 50 MB and 25 megapixels. A Drive image goes in through Drive's short-lived thumbnail link (at most 1600 px on the long side), so it needn't be shared. No local files. Placement: center (default), full, left or right half, or an explicit box in points; the image keeps its aspect ratio inside the box.",
+    "Puts an image on a slide of a Google Slides deck, from a public https URL or a Drive file id. Google's servers fetch the image (the extension never does), once, at insertion: a URL must be publicly reachable, and the image PNG, JPEG or GIF, under 50 MB and 25 megapixels. A Drive file works only if it's shared as \"anyone with the link\" (the extension never changes sharing; a private file is refused). No local files. The image becomes part of the deck, visible to everyone the deck is shared with. Placement: center (default), full, left or right half, or an explicit box in points; the image keeps its aspect ratio inside the box.",
   input: {
     presentationId: presentationIdInput,
     slideId: slideIdInput,
     imageUrl: z.string().min(1).max(2048).optional().describe("A public https:// image URL (Google fetches it)."),
-    driveFileId: z.string().min(1).max(500).optional().describe("A Drive image's file id or drive.google.com URL."),
+    driveFileId: z.string().min(1).max(500).optional().describe('A Drive image\'s file id or link; the file must be shared as "anyone with the link".'),
     placement: z.enum(["center", "full", "left", "right"]).default("center"),
     box: z
       .object({ x: z.number().min(-10_000).max(10_000), y: z.number().min(-10_000).max(10_000), width: z.number().min(1).max(10_000), height: z.number().min(1).max(10_000) })
@@ -613,7 +641,12 @@ const insertImage = tool({
     const pageH = toPt(deck.pageSize?.height, 405);
     const box = args.box ?? placementBox(args.placement, pageW, pageH);
     const objectId = newObjectId("img");
-    const res = await batchUpdate(g, id, [createImageRequest(objectId, source.url, slideId, box)]);
+    let res: BatchResponse;
+    try {
+      res = await batchUpdate(g, id, [createImageRequest(objectId, source.url, slideId, box)]);
+    } catch (err) {
+      throw imageError(err, fileId !== undefined);
+    }
     const made = res.replies?.[0]?.createImage?.objectId ?? objectId;
     return {
       text: `Inserted ${fileId ? `Drive image "${source.name}"` : "the image"} on slide ${i + 1} [id ${slideId}] at ${box.x},${box.y} pt, ${box.width} × ${box.height} pt [image id ${made}].`,

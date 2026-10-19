@@ -37480,7 +37480,7 @@ var spreadsheetIdInput = external_exports.string().min(1).max(500).describe("The
 var rangeInput = external_exports.string().min(1).max(300).describe("A1 notation: 'Sheet 1'!A1:C10, Sheet1!A:C, Sheet1!2:5, Sheet1!A2:C (open-ended), or a tab name alone for the whole tab. Without a tab name, the first visible tab.");
 var cellValue = external_exports.union([external_exports.string().max(5e4), external_exports.number(), external_exports.boolean(), external_exports.null()]);
 var valuesInput = external_exports.array(external_exports.array(cellValue).max(MAX_COLUMN)).min(1).max(1e4).describe('Rows of cell values (strings, numbers, booleans). null leaves a cell unchanged; "" clears it.');
-var inputMode = external_exports.enum(["USER_ENTERED", "RAW"]).default("USER_ENTERED").describe("USER_ENTERED (default) parses values as if typed into Sheets: =formulas, numbers, dates. RAW stores them exactly as given, as text.");
+var inputMode = external_exports.enum(["USER_ENTERED", "RAW"]).default("USER_ENTERED").describe(`USER_ENTERED (default) parses values as if typed into Sheets: =formulas, numbers, dates. RAW stores them as given, unparsed: strings stay text (an "=…" string isn't a formula), numbers and booleans stay numbers and booleans.`);
 var headerInput = external_exports.array(external_exports.string().max(1e3)).min(1).max(1e3);
 function checkValues(values) {
   const cells = values.reduce((n, r) => n + r.length, 0);
@@ -37558,7 +37558,7 @@ var read = tool({
     if (firstRow > lastRow) {
       return { text: `No rows: "${tab.title}" has ${rowCount} rows and the range ends at row ${lastRow}.`, structured: { ...base, range: null, rows: [], hasMore: false } };
     }
-    const toRow = Math.min(lastRow, firstRow + maxRows);
+    const toRow = Math.min(lastRow, firstRow + maxRows - 1);
     const request = formatA1({
       sheet: tab.title,
       startCol: a1.startCol,
@@ -37571,13 +37571,14 @@ var read = tool({
       query: { majorDimension: "ROWS", valueRenderOption: render, dateTimeRenderOption: render === "FORMATTED_VALUE" ? void 0 : "FORMATTED_STRING" }
     });
     const values = res.values ?? [];
-    const hasMore = values.length > maxRows;
+    const hasMore = toRow < lastRow;
     const rows = values.slice(0, maxRows);
-    const structured = { ...base, range: res.range ?? request, rows, hasMore };
-    if (hasMore) structured.nextFromRow = firstRow + maxRows;
-    if (rows.length === 0) return { text: `${res.range ?? request} is empty.`, structured };
+    const structured = { ...base, range: res.range ?? request, rows, lastRow, hasMore };
+    if (hasMore) structured.nextFromRow = toRow + 1;
+    const more = `The range runs on to row ${lastRow}${rows.length < maxRows ? " (rows below may be empty)" : ""}: call again with fromRow ${toRow + 1}.`;
+    if (rows.length === 0) return { text: `${res.range ?? request} is empty.${hasMore ? ` ${more}` : ""}`, structured };
     const parts = [`${res.range ?? request}: rows ${firstRow}–${firstRow + rows.length - 1}`, "", markdownTable(rows, firstRow, startCol)];
-    if (hasMore) parts.push("", `More rows follow: call again with fromRow ${firstRow + maxRows}.`);
+    if (hasMore) parts.push("", more);
     return { text: parts.join("\n"), structured };
   }
 });
@@ -37949,6 +37950,11 @@ function outlineSlideRequests(item, ids, insertionIndex) {
   }
   return requests;
 }
+var NO_LAYOUT = `This deck's theme has no "Title and body" layout, which outline slides are built on. Instead, copy a slide that has the layout you want with slides_duplicate_slide and change its text with slides_replace_text.`;
+function layoutError(err) {
+  const e = err;
+  return e?.status === 400 && /layout/i.test(e.message ?? "") ? new InputError(NO_LAYOUT) : err;
+}
 function outlineIds() {
   const slide = newObjectId("slide");
   return { slide, title: `${slide}_title`, body: `${slide}_body` };
@@ -38023,25 +38029,27 @@ function createImageRequest(objectId, url2, slideId, box) {
   };
 }
 var IMAGE_TYPES = /* @__PURE__ */ new Set(["image/png", "image/jpeg", "image/gif"]);
+var NOT_PUBLIC = `This image isn't shared publicly, and Slides can only insert public images (Google fetches them without signing in). Use an https imageUrl, or share the file as "anyone with the link" in Google Drive yourself: this extension never changes sharing.`;
 async function driveImageUrl(g, fileId2) {
   const f = await g.json("GET", `${DRIVE_FILES_BASE}/${enc2(fileId2)}`, {
-    query: { fields: "id,name,mimeType,size,thumbnailLink", supportsAllDrives: true }
+    query: { fields: "id,name,mimeType,size,resourceKey,permissions(type,role)", supportsAllDrives: true }
   });
   const name = f.name ?? fileId2;
   if (!f.mimeType || !IMAGE_TYPES.has(f.mimeType)) throw new InputError(`"${name}" is ${f.mimeType ?? "of an unknown type"}; Slides takes PNG, JPEG or GIF images.`);
   if (f.size !== void 0 && Number(f.size) >= 50 * 1024 * 1024) throw new InputError(`"${name}" is over the 50 MB Slides accepts.`);
-  if (!f.thumbnailLink) throw new InputError(`Drive has no image link for "${name}" yet (it may still be processing). Try again shortly, or pass a public https imageUrl.`);
-  let link;
-  try {
-    link = new URL(f.thumbnailLink);
-  } catch {
-    throw new InputError(`Drive returned an unusable image link for "${name}".`);
+  if (f.permissions && !f.permissions.some((p) => p.type === "anyone")) throw new InputError(NOT_PUBLIC);
+  let url2 = `https://drive.google.com/uc?export=download&id=${enc2(f.id ?? fileId2)}`;
+  if (f.resourceKey) url2 += `&resourcekey=${enc2(f.resourceKey)}`;
+  return { url: url2, name };
+}
+function imageError(err, fromDrive) {
+  const e = err;
+  if (e?.status === 400 && /publicly accessible|retriev/i.test(e.message ?? "")) {
+    return new InputError(
+      fromDrive ? NOT_PUBLIC : "Google couldn't fetch that image. The URL must be public (no sign-in or cookies), and the image PNG, JPEG or GIF, under 50 MB and 25 megapixels."
+    );
   }
-  if (link.protocol !== "https:" || !(link.hostname === "googleusercontent.com" || link.hostname.endsWith(".googleusercontent.com"))) {
-    throw new InputError(`Drive returned an unexpected image link for "${name}".`);
-  }
-  const sized = link.href.replace(/=s\d+$/, "=s1600");
-  return { url: sized, name };
+  return err;
 }
 var presentationIdInput = external_exports.string().min(1).max(500).describe("The presentation's id (the part after /d/ in its URL) or its docs.google.com URL.");
 var slideIdInput = external_exports.string().min(1).max(50).describe("The slide's object id, as slides_read lists it.");
@@ -38143,7 +38151,7 @@ var create2 = tool({
         if (item.notes) notes.push({ slideId: ids.slide, notes: item.notes });
       }
       if (first && !args.titleSlide) requests.push({ deleteObject: { objectId: first.objectId } });
-      if (requests.length) await batchUpdate2(g, id, requests);
+      if (requests.length) await batchUpdate2(g, id, requests).catch((err) => Promise.reject(layoutError(err)));
       await fillNotes(g, id, notes);
     } catch (err) {
       throw afterCreate(err, `Created the deck ${url2} (id ${id})${folder ? ` in folder ${folder}` : ""}`, "filling it in failed: ");
@@ -38173,7 +38181,7 @@ var addSlide = tool({
     const count = deck.slides?.length ?? 0;
     if (args.position !== void 0 && args.position > count + 1) throw new InputError(`The deck has ${plural2(count, "slide")}, so position can be 1 to ${count + 1}.`);
     const ids = outlineIds();
-    await batchUpdate2(g, id, outlineSlideRequests(args, ids, args.position === void 0 ? void 0 : args.position - 1));
+    await batchUpdate2(g, id, outlineSlideRequests(args, ids, args.position === void 0 ? void 0 : args.position - 1)).catch((err) => Promise.reject(layoutError(err)));
     if (args.notes) await fillNotes(g, id, [{ slideId: ids.slide, notes: args.notes }]);
     const position = args.position ?? count + 1;
     return { text: `Added slide ${position} "${cleanLine(args.title) || "(no title)"}" [id ${ids.slide}].`, structured: { presentationId: id, slideId: ids.slide, position } };
@@ -38257,12 +38265,12 @@ var replaceText = tool({
 var insertImage = tool({
   name: "slides_insert_image",
   title: "Insert an image on a slide",
-  description: "Puts an image on a slide of a Google Slides deck, from a public https URL or a Drive file id. Google's servers fetch the image (the extension never does), once, at insertion: a URL must be publicly reachable, and the image PNG, JPEG or GIF, under 50 MB and 25 megapixels. A Drive image goes in through Drive's short-lived thumbnail link (at most 1600 px on the long side), so it needn't be shared. No local files. Placement: center (default), full, left or right half, or an explicit box in points; the image keeps its aspect ratio inside the box.",
+  description: `Puts an image on a slide of a Google Slides deck, from a public https URL or a Drive file id. Google's servers fetch the image (the extension never does), once, at insertion: a URL must be publicly reachable, and the image PNG, JPEG or GIF, under 50 MB and 25 megapixels. A Drive file works only if it's shared as "anyone with the link" (the extension never changes sharing; a private file is refused). No local files. The image becomes part of the deck, visible to everyone the deck is shared with. Placement: center (default), full, left or right half, or an explicit box in points; the image keeps its aspect ratio inside the box.`,
   input: {
     presentationId: presentationIdInput,
     slideId: slideIdInput,
     imageUrl: external_exports.string().min(1).max(2048).optional().describe("A public https:// image URL (Google fetches it)."),
-    driveFileId: external_exports.string().min(1).max(500).optional().describe("A Drive image's file id or drive.google.com URL."),
+    driveFileId: external_exports.string().min(1).max(500).optional().describe(`A Drive image's file id or link; the file must be shared as "anyone with the link".`),
     placement: external_exports.enum(["center", "full", "left", "right"]).default("center"),
     box: external_exports.object({ x: external_exports.number().min(-1e4).max(1e4), y: external_exports.number().min(-1e4).max(1e4), width: external_exports.number().min(1).max(1e4), height: external_exports.number().min(1).max(1e4) }).optional().describe("An explicit box in points from the slide's top-left (a default slide is 720 × 405 pt); overrides placement.")
   },
@@ -38281,7 +38289,12 @@ var insertImage = tool({
     const pageH = toPt(deck.pageSize?.height, 405);
     const box = args.box ?? placementBox(args.placement, pageW, pageH);
     const objectId = newObjectId("img");
-    const res = await batchUpdate2(g, id, [createImageRequest(objectId, source.url, slideId, box)]);
+    let res;
+    try {
+      res = await batchUpdate2(g, id, [createImageRequest(objectId, source.url, slideId, box)]);
+    } catch (err) {
+      throw imageError(err, fileId2 !== void 0);
+    }
     const made = res.replies?.[0]?.createImage?.objectId ?? objectId;
     return {
       text: `Inserted ${fileId2 ? `Drive image "${source.name}"` : "the image"} on slide ${i + 1} [id ${slideId}] at ${box.x},${box.y} pt, ${box.width} × ${box.height} pt [image id ${made}].`,

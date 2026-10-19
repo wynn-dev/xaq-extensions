@@ -179,8 +179,27 @@ function defineTests(lib) {
       const p3 = await call("sheets_read", { spreadsheetId: id, range: "Log!A:A", maxRows: 100, fromRow: 201 });
       assert.equal(p3.structured.rows.length, 50);
       assert.equal(p3.structured.rows[0][0], "r201");
+      // The open range runs on to the grid's last row (1000), which may still hold data.
+      assert.equal(p3.structured.hasMore, true);
+      assert.equal(p3.structured.nextFromRow, 301);
+      assert.match(p3.text, /runs on to row 1000 \(rows below may be empty\): call again with fromRow 301/);
+      const last = await call("sheets_read", { spreadsheetId: id, range: "Log!A:A", maxRows: 1000, fromRow: 201 });
+      assert.equal(last.structured.hasMore, false);
+      assert.equal(fake.state.requests.at(-1).path, `/v4/spreadsheets/${id}/values/'Log'!A201%3AA1000`, "no row past the page is fetched");
+    });
+
+    it("sheets_read reports more rows in the range even when the rows just below the page are empty", async () => {
+      fake.addSpreadsheet({ id: "1GappySheetIdXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX", title: "Gaps", tabs: [{ title: "T", cells: [["a"], ["b"], [null], [null], [null], [null], ["far"]] }] });
+      const id = "1GappySheetIdXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX";
+      const p1 = await call("sheets_read", { spreadsheetId: id, range: "T!A1:A10", maxRows: 3 });
+      assert.deepEqual(p1.structured.rows, [["a"], ["b"]]);
+      assert.equal(p1.structured.hasMore, true);
+      assert.equal(p1.structured.nextFromRow, 4);
+      const p2 = await call("sheets_read", { spreadsheetId: id, range: "T!A1:A10", maxRows: 3, fromRow: 7 });
+      assert.deepEqual(p2.structured.rows, [["far"]]);
+      assert.equal(p2.structured.hasMore, true);
+      const p3 = await call("sheets_read", { spreadsheetId: id, range: "T!A1:A10", maxRows: 3, fromRow: 10 });
       assert.equal(p3.structured.hasMore, false);
-      assert.equal(p3.structured.nextFromRow, undefined);
     });
 
     it("sheets_read clamps a range past the grid instead of failing, and reports an empty range", async () => {
@@ -214,6 +233,11 @@ function defineTests(lib) {
       await call("sheets_write", { spreadsheetId: SS, range: "'Sheet 1'!A7:B7", values: [["=1+1", "007"]], input: "RAW" });
       assert.deepEqual(fake.cell(SS, "Sheet 1", "A7"), { v: "=1+1" });
       assert.deepEqual(fake.cell(SS, "Sheet 1", "B7"), { v: "007" });
+      await call("sheets_write", { spreadsheetId: SS, range: "'Sheet 1'!C7", values: [[42, true]], input: "RAW" });
+      assert.deepEqual([fake.cell(SS, "Sheet 1", "C7"), fake.cell(SS, "Sheet 1", "D7")], [{ v: 42 }, { v: true }]);
+      const desc = sheetsTools.find((t) => t.name === "sheets_write").input.input.description;
+      assert.match(desc, /numbers and booleans stay numbers and booleans/);
+      assert.doesNotMatch(desc, /as text\./);
     });
 
     it("sheets_write refuses values that don't fit a bounded range, before any request", async () => {

@@ -283,7 +283,7 @@ const valuesInput = z
 const inputMode = z
   .enum(["USER_ENTERED", "RAW"])
   .default("USER_ENTERED")
-  .describe("USER_ENTERED (default) parses values as if typed into Sheets: =formulas, numbers, dates. RAW stores them exactly as given, as text.");
+  .describe("USER_ENTERED (default) parses values as if typed into Sheets: =formulas, numbers, dates. RAW stores them as given, unparsed: strings stay text (an \"=…\" string isn't a formula), numbers and booleans stay numbers and booleans.");
 const headerInput = z.array(z.string().max(1000)).min(1).max(1000);
 
 function checkValues(values: unknown[][]): number {
@@ -375,8 +375,7 @@ const read = tool({
     if (firstRow > lastRow) {
       return { text: `No rows: "${tab.title}" has ${rowCount} rows and the range ends at row ${lastRow}.`, structured: { ...base, range: null, rows: [], hasMore: false } };
     }
-    // One row past the page, when the range has one, says whether there's more.
-    const toRow = Math.min(lastRow, firstRow + maxRows);
+    const toRow = Math.min(lastRow, firstRow + maxRows - 1);
     const request = formatA1({
       sheet: tab.title,
       startCol: a1.startCol,
@@ -389,13 +388,15 @@ const read = tool({
       query: { majorDimension: "ROWS", valueRenderOption: render, dateTimeRenderOption: render === "FORMATTED_VALUE" ? undefined : "FORMATTED_STRING" },
     });
     const values = res.values ?? [];
-    const hasMore = values.length > maxRows;
+    // More is the rest of the range (clamped to the tab's grid), even when the rows just below the page are empty.
+    const hasMore = toRow < lastRow;
     const rows = values.slice(0, maxRows);
-    const structured: Record<string, unknown> = { ...base, range: res.range ?? request, rows, hasMore };
-    if (hasMore) structured.nextFromRow = firstRow + maxRows;
-    if (rows.length === 0) return { text: `${res.range ?? request} is empty.`, structured };
+    const structured: Record<string, unknown> = { ...base, range: res.range ?? request, rows, lastRow, hasMore };
+    if (hasMore) structured.nextFromRow = toRow + 1;
+    const more = `The range runs on to row ${lastRow}${rows.length < maxRows ? " (rows below may be empty)" : ""}: call again with fromRow ${toRow + 1}.`;
+    if (rows.length === 0) return { text: `${res.range ?? request} is empty.${hasMore ? ` ${more}` : ""}`, structured };
     const parts = [`${res.range ?? request}: rows ${firstRow}–${firstRow + rows.length - 1}`, "", markdownTable(rows, firstRow, startCol)];
-    if (hasMore) parts.push("", `More rows follow: call again with fromRow ${firstRow + maxRows}.`);
+    if (hasMore) parts.push("", more);
     return { text: parts.join("\n"), structured };
   },
 });

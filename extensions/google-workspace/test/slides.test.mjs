@@ -237,6 +237,13 @@ function defineTests(lib) {
       assert.deepEqual([read.structured.slides[0].title, read.structured.slides[0].body, read.structured.slides[0].notes], ["Budget", ["- $1M"], "Ask for more"]);
     });
 
+    it("slides_add_slide says so plainly when the deck's theme has no Title-and-body layout", async () => {
+      fake.state.presentations.get(DECK)._missingLayouts = ["TITLE_AND_BODY"];
+      await assert.rejects(call("slides_add_slide", { presentationId: DECK, title: "X" }), (err) => err.message === lib.NO_LAYOUT);
+      assert.match(lib.NO_LAYOUT, /no "Title and body" layout.*slides_duplicate_slide.*slides_replace_text/);
+      assert.equal(order().length, 3);
+    });
+
     it("slides_add_slide appends by default and refuses a position past the end", async () => {
       const out = await call("slides_add_slide", { presentationId: DECK, title: "End" });
       assert.equal(order().at(-1), out.structured.slideId);
@@ -307,20 +314,48 @@ function defineTests(lib) {
       assert.ok(fake.state.requests.every((r) => r.host === "slides.googleapis.com"), "the extension never fetches the image itself");
     });
 
-    it("slides_insert_image takes an explicit box, and a Drive image through its thumbnail link at 1600 px", async () => {
-      fake.state.driveFiles.set(DRIVE_IMG, { id: DRIVE_IMG, name: "logo.png", mimeType: "image/png", size: "20480", thumbnailLink: "https://lh3.googleusercontent.com/drive-storage/AJQWtBabc=s220" });
+    it("slides_insert_image takes an explicit box, and a Drive image shared with anyone through its public link", async () => {
+      fake.state.driveFiles.set(DRIVE_IMG, { id: DRIVE_IMG, name: "logo.png", mimeType: "image/png", size: "20480", resourceKey: "0-abcRK", permissions: [{ type: "anyone", role: "reader" }, { type: "user", role: "owner" }] });
       const out = await call("slides_insert_image", { presentationId: DECK, slideId: "g_title", driveFileId: `https://drive.google.com/file/d/${DRIVE_IMG}/view`, box: { x: 600, y: 20, width: 100, height: 50 } });
       const drive = fake.state.requests.find((r) => r.host === "www.googleapis.com");
       assert.equal(drive.path, `/drive/v3/files/${DRIVE_IMG}`);
-      assert.deepEqual(drive.query, { fields: "id,name,mimeType,size,thumbnailLink", supportsAllDrives: "true" });
+      assert.deepEqual(drive.query, { fields: "id,name,mimeType,size,resourceKey,permissions(type,role)", supportsAllDrives: "true" });
       const req = batches()[0].body.requests[0].createImage;
-      assert.equal(req.url, "https://lh3.googleusercontent.com/drive-storage/AJQWtBabc=s1600");
+      assert.equal(req.url, `https://drive.google.com/uc?export=download&id=${DRIVE_IMG}&resourcekey=0-abcRK`);
       assert.deepEqual(out.structured.box, { x: 600, y: 20, width: 100, height: 50 });
       assert.match(out.text, /Drive image "logo.png"/);
     });
 
+    it("slides_insert_image refuses a private Drive image before calling Slides", async () => {
+      fake.state.driveFiles.set(DRIVE_IMG, { id: DRIVE_IMG, name: "logo.png", mimeType: "image/png", permissions: [{ type: "user", role: "owner" }, { type: "domain", role: "reader" }] });
+      await assert.rejects(call("slides_insert_image", { presentationId: DECK, slideId: "g_photo", driveFileId: DRIVE_IMG }), (err) => err.message === lib.NOT_PUBLIC);
+      assert.equal(batches().length, 0);
+      assert.match(lib.NOT_PUBLIC, /isn't shared publicly.*https imageUrl.*"anyone with the link".*never changes sharing/);
+    });
+
+    it("slides_insert_image maps Slides' refusal of a private Drive image (permissions hidden from this account) to the same message", async () => {
+      // Drive lists permissions only to someone who can share the file; here it can't, so the pre-check can't tell.
+      fake.state.driveFiles.set(DRIVE_IMG, { id: DRIVE_IMG, name: "logo.png", mimeType: "image/png", _permissions: [{ type: "user", role: "owner" }] });
+      await assert.rejects(call("slides_insert_image", { presentationId: DECK, slideId: "g_photo", driveFileId: DRIVE_IMG }), (err) => err.message === lib.NOT_PUBLIC);
+      assert.equal(batches().length, 1, "Slides was asked, and refused");
+      fake.state.driveFiles.get(DRIVE_IMG)._permissions.push({ type: "anyone", role: "reader" });
+      const ok = await call("slides_insert_image", { presentationId: DECK, slideId: "g_photo", driveFileId: DRIVE_IMG });
+      assert.match(ok.text, /Inserted Drive image "logo.png"/);
+    });
+
+    it("the fake refuses Drive thumbnail links and private Drive links, as Slides fetches without credentials", () => {
+      const pr = fake.state.presentations.get(DECK);
+      fake.state.driveFiles.set(DRIVE_IMG, { id: DRIVE_IMG, name: "p.png", mimeType: "image/png", permissions: [{ type: "user", role: "owner" }] });
+      for (const url of ["https://lh3.googleusercontent.com/drive-storage/AJQWtBabc=s1600", `https://drive.google.com/uc?export=download&id=${DRIVE_IMG}`]) {
+        const res = fake.handle("POST", new URL(`https://slides.googleapis.com/v1/presentations/${DECK}:batchUpdate`), { requests: [createImageRequest("img_probe1", url, "g_photo", { x: 0, y: 0, width: 10, height: 10 })] });
+        assert.equal(res.status, 400, url);
+        assert.match(res.body.error.message, /publicly accessible/);
+      }
+      assert.equal(pr.slides[2].pageElements.length, 1);
+    });
+
     it("slides_insert_image refuses bad sources before writing anything", async () => {
-      fake.state.driveFiles.set(DRIVE_IMG, { id: DRIVE_IMG, name: "notes.pdf", mimeType: "application/pdf", thumbnailLink: "https://lh3.googleusercontent.com/x=s220" });
+      fake.state.driveFiles.set(DRIVE_IMG, { id: DRIVE_IMG, name: "notes.pdf", mimeType: "application/pdf", permissions: [{ type: "anyone", role: "reader" }] });
       await assert.rejects(call("slides_insert_image", { presentationId: DECK, slideId: "g_photo", driveFileId: DRIVE_IMG }), /application\/pdf; Slides takes PNG, JPEG or GIF/);
       await assert.rejects(call("slides_insert_image", { presentationId: DECK, slideId: "g_photo", imageUrl: "http://example.com/a.png" }), /https/);
       await assert.rejects(call("slides_insert_image", { presentationId: DECK, slideId: "g_photo" }), /exactly one of imageUrl and driveFileId/);
@@ -332,7 +367,7 @@ function defineTests(lib) {
 
     it("slides_insert_image surfaces Google failing to fetch the image", async () => {
       fake.state.unfetchableImages.add("https://example.com/private.png");
-      await assert.rejects(call("slides_insert_image", { presentationId: DECK, slideId: "g_photo", imageUrl: "https://example.com/private.png" }), /problem retrieving the image/);
+      await assert.rejects(call("slides_insert_image", { presentationId: DECK, slideId: "g_photo", imageUrl: "https://example.com/private.png" }), /^InputError: Google couldn't fetch that image\. The URL must be public/);
     });
 
     it("surfaces an unknown deck and refuses bad ids before any request", async () => {
@@ -370,6 +405,9 @@ function defineTests(lib) {
       const t = slidesTools.find((x) => x.name === "slides_insert_image");
       assert.match(t.description, /Google's servers fetch the image/);
       assert.match(t.description, /No local files/);
+      assert.match(t.description, /shared as "anyone with the link" \(the extension never changes sharing/);
+      assert.match(t.description, /visible to everyone the deck is shared with/);
+      assert.doesNotMatch(t.description, /needn't be shared|thumbnail/);
     });
   });
 }
