@@ -251,7 +251,7 @@ export async function startFakeGoogle(fixture) {
       createdTime: now,
       modifiedTime: now,
       owners: [{ kind: "drive#user", displayName: state.user.displayName, emailAddress: state.user.emailAddress, me: true }],
-      webViewLink: mimeType === DOC ? `https://docs.google.com/document/d/${id}/edit?usp=drivesdk` : `https://drive.google.com/file/d/${id}/view?usp=drivesdk`,
+      webViewLink: mimeType === DOC ? `https://docs.google.com/document/d/${id}/edit?usp=drivesdk` : mimeType === FOLDER ? `https://drive.google.com/drive/folders/${id}` : `https://drive.google.com/file/d/${id}/view?usp=drivesdk`,
       capabilities: { canEdit: true, canComment: true, canDownload: true },
       _appCreated: true,
     };
@@ -306,6 +306,14 @@ export async function startFakeGoogle(fixture) {
     if (!f) return notFoundFile(res, decodeURIComponent(m[1]));
     const rest = m[2] ? m[2].split("/") : [];
     if (req.method === "GET" && !rest.length) return json(res, 200, publicFile(f));
+    if (req.method === "PATCH" && !rest.length) {
+      // files.update: drive.file allows it only on files the app created; the extension only ever sets trashed.
+      if (!f._appCreated) return json(res, 403, errors.drive(403, "appNotAuthorizedToFile", `The user has not granted the app 123456789012 write access to the file ${f.id}.`, { location: "fileId", locationType: "parameter" }));
+      const patch = JSON.parse(req.body.toString("utf8") || "{}");
+      for (const k of Object.keys(patch)) if (!["trashed", "name", "description"].includes(k)) return json(res, 403, errors.drive(403, "fieldNotWritable", `The resource body includes fields which are not directly writable.`));
+      Object.assign(f, patch, { modifiedTime: new Date().toISOString() });
+      return json(res, 200, publicFile(f));
+    }
     if (req.method === "GET" && rest[0] === "export" && rest.length === 1) return exportFile(req, res, f);
     if (rest[0] === "comments") return comment(req, res, f, rest.slice(1));
     return json(res, 404, errors.drive(404, "notFound", "Not Found"));

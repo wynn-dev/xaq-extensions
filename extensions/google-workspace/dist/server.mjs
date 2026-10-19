@@ -27814,7 +27814,7 @@ function classify(status, body, service) {
     return {
       error: new GoogleError(
         "no_file_access",
-        "Google lets this extension change a file through Drive only if the extension created it (it asks for Drive's per-file access, drive.file, not full Drive access). Reading works for every file; for this change, use a file the extension created, or make the edit in Google Docs.",
+        "Google lets this extension change a file through Drive (comment on it, move it to the Trash) only if the extension created it: it has Drive's per-file access (drive.file), not full Drive access. Reading works for every file. Use a file the extension created, or do this in Google Drive yourself.",
         status
       ),
       retry: false
@@ -36707,6 +36707,41 @@ var driveTools = [
       return {
         text: `Exported "${f.name}" as ${a.format}: ${sizeText(size)}. ${note} To send it by email, attach the Drive file by its id (${id}) rather than the export.`,
         structured: { ...base, mimeType: mime, size, ...a.includeBase64 && fits ? { base64: res.data.toString("base64") } : {} }
+      };
+    }
+  }),
+  tool({
+    name: "drive_create_folder",
+    title: "Create a Drive folder",
+    description: "Create a folder in Google Drive, at the top of My Drive or inside another folder. Returns its id and link; pass the id as folderId to the create tools to put new files in it.",
+    risk: "write",
+    input: {
+      name: external_exports.string().min(1).max(500).describe("The folder's name."),
+      parentId: external_exports.string().min(1).max(2048).optional().describe("Create it inside this folder (id or link). Default: the top of My Drive.")
+    },
+    async run(a, g) {
+      const metadata = { name: a.name, mimeType: MIME.folder };
+      if (a.parentId) metadata.parents = [fileId(a.parentId, "folder id", true)];
+      const f = await g.json("POST", `${DRIVE}/files`, { query: { fields: "id,name,mimeType,webViewLink,parents", supportsAllDrives: true }, body: metadata });
+      if (!f.id) throw new Error("Drive didn't return the new folder's id");
+      const link = f.webViewLink ?? `https://drive.google.com/drive/folders/${f.id}`;
+      return { text: `Created folder "${f.name ?? a.name}": ${link} (id ${f.id})`, structured: { folderId: f.id, name: f.name ?? a.name, webViewLink: link, parents: f.parents ?? [] } };
+    }
+  }),
+  tool({
+    name: "drive_trash",
+    title: "Move a Drive file or folder to the Trash",
+    description: "Move a file or folder to the Google Drive Trash (it can be restored from the Trash for 30 days; nothing is deleted permanently). Google allows this only for files and folders the extension created.",
+    risk: "risky",
+    target: "/fileId",
+    input: { fileId: fileArg("file or folder") },
+    async run(a, g) {
+      const id = fileId(a.fileId);
+      const f = await g.json("PATCH", `${DRIVE}/files/${encodeURIComponent(id)}`, { query: { fields: "id,name,mimeType,trashed,webViewLink", supportsAllDrives: true }, body: { trashed: true } });
+      if (f.trashed !== true) throw new Error("Drive didn't confirm the file is in the Trash");
+      return {
+        text: `Moved "${f.name ?? id}" (${typeName(f.mimeType)}, id ${id}) to the Trash. Restore it from the Trash in Google Drive within 30 days if needed.`,
+        structured: { fileId: id, name: f.name ?? null, type: typeName(f.mimeType), trashed: true }
       };
     }
   })
