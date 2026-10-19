@@ -7,11 +7,19 @@
     "node": ">=22.13"
   },
   "scripts": {
-    "build": "node extensions/whoop/scripts/build.mjs",
-    "check:dist": "node extensions/whoop/scripts/build.mjs --check",
-    "typecheck": "tsc -p extensions/whoop/tsconfig.json",
-    "test": "node --test --test-concurrency=1 extensions/whoop/test/*.test.mjs",
-    "goldens": "node extensions/whoop/scripts/goldens.mjs"
+    "build": "npm run build:whoop && npm run build:google-workspace",
+    "check:dist": "npm run check:dist:whoop && npm run check:dist:google-workspace",
+    "typecheck": "npm run typecheck:whoop && npm run typecheck:google-workspace",
+    "test": "npm run test:whoop && npm run test:google-workspace",
+    "goldens": "node extensions/whoop/scripts/goldens.mjs",
+    "build:whoop": "node extensions/whoop/scripts/build.mjs",
+    "check:dist:whoop": "node extensions/whoop/scripts/build.mjs --check",
+    "typecheck:whoop": "tsc -p extensions/whoop/tsconfig.json",
+    "test:whoop": "node --test --test-concurrency=1 extensions/whoop/test/*.test.mjs",
+    "build:google-workspace": "node extensions/google-workspace/scripts/build.mjs",
+    "check:dist:google-workspace": "node extensions/google-workspace/scripts/build.mjs --check",
+    "typecheck:google-workspace": "tsc -p extensions/google-workspace/tsconfig.json",
+    "test:google-workspace": "node --test --test-concurrency=1 extensions/google-workspace/test/*.test.mjs"
   },
   "devDependencies": {
     "@modelcontextprotocol/sdk": "1.32.1",
