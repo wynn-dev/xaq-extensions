@@ -2,10 +2,10 @@
 // changes Drive. Shared helpers (fileSummary, exportText) are used by docs.ts too.
 
 import { z } from "zod";
-import { DRIVE, type GoogleClient, SHEETS } from "./google.ts";
+import { DRIVE, DRIVE_UPLOAD, type GoogleClient, SHEETS } from "./google.ts";
 import { stripDataImages } from "./markdown.ts";
 import { InputError, tool, type ToolOutput } from "./tool.ts";
-import { MIME, fileId, pageText, qString, rfc3339, sizeText, toCsv, typeName } from "./util.ts";
+import { MIME, fileId, mimeFromName, multipart, pageText, qString, rfc3339, sizeText, toCsv, typeName } from "./util.ts";
 
 const LIST_FIELDS = "nextPageToken,incompleteSearch,files(id,name,mimeType,modifiedTime,owners(displayName,emailAddress,me),webViewLink,size,shortcutDetails(targetId,targetMimeType))";
 export const FILE_FIELDS =
@@ -133,6 +133,10 @@ export const exportFormats = (mimeType: string | undefined): string[] => Object.
 
 /** Binary exports at most this big are returned as base64 when asked (base64 grows it by a third; xaq drops binaries over 5 MB). */
 export const MAX_BASE64_BYTES = 3 * 1024 * 1024;
+
+/** drive_upload's limit, decoded: its base64 (a third larger) plus the JSON-RPC envelope stays under xaq's 8 MB message cap. */
+export const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
+const MAX_UPLOAD_BASE64 = Math.ceil(MAX_UPLOAD_BYTES / 3) * 4 + 1024;
 
 interface SheetProps {
   sheetId?: number;
@@ -350,6 +354,45 @@ export const driveTools = [
       if (!f.id) throw new Error("Drive didn't return the new folder's id");
       const link = f.webViewLink ?? `https://drive.google.com/drive/folders/${f.id}`;
       return { text: `Created folder "${f.name ?? a.name}": ${link} (id ${f.id})`, structured: { folderId: f.id, name: f.name ?? a.name, webViewLink: link, parents: f.parents ?? [] } };
+    },
+  }),
+
+  tool({
+    name: "drive_upload",
+    title: "Upload a file to Drive",
+    description:
+      "Upload a file to Google Drive as it is (no conversion: use docs_create for a Google Doc), at the top of My Drive or in a folder, and get its id and link, for example to share a link by email. The content is base64 and at most 5 MB once decoded (the limit keeps the call within xaq's message size). The type is guessed from the name's extension when mimeType is missing.",
+    risk: "write",
+    input: {
+      name: z.string().min(1).max(500).describe("The file's name, with its extension (e.g. chart.png)."),
+      folderId: z.string().min(1).max(2048).optional().describe("Put it in this folder (id or link). Default: the top of My Drive."),
+      mimeType: z
+        .string()
+        .regex(/^[\w.+-]+\/[\w.+-]+$/)
+        .max(200)
+        .optional()
+        .describe("The file's MIME type, e.g. image/png. Default: guessed from the name. Google Docs, Sheets and Slides types aren't accepted."),
+      content_base64: z.string().min(1).max(MAX_UPLOAD_BASE64).describe("The file's bytes, base64-encoded (at most 5 MB decoded)."),
+    },
+    async run(a, g) {
+      const mimeType = a.mimeType ?? mimeFromName(a.name);
+      if (mimeType.startsWith("application/vnd.google-apps.")) throw new InputError("drive_upload stores files as they are; it can't make Google Docs, Sheets or Slides files. Use docs_create (or the Sheets and Slides create tools) instead.");
+      const b64 = a.content_base64.replace(/\s+/g, "");
+      if (!/^[A-Za-z0-9+/]*={0,2}$/.test(b64) || b64.length % 4 === 1) throw new InputError("content_base64 isn't valid base64.");
+      const bytes = Buffer.from(b64, "base64");
+      if (bytes.length > MAX_UPLOAD_BYTES) throw new InputError(`That's ${sizeText(bytes.length)}; drive_upload takes at most 5 MB.`);
+      const metadata: Record<string, unknown> = { name: a.name, mimeType };
+      if (a.folderId) metadata.parents = [fileId(a.folderId, "folder id", true)];
+      const { body, contentType } = multipart(metadata, bytes, mimeType);
+      const res = await g.bytes("POST", `${DRIVE_UPLOAD}/files`, { query: { uploadType: "multipart", fields: "id,name,mimeType,size,webViewLink,parents", supportsAllDrives: true }, body, contentType });
+      const f = JSON.parse(res.data.toString("utf8")) as DriveFile;
+      if (!f.id) throw new Error("Drive didn't return the new file's id");
+      const size = f.size !== undefined ? Number(f.size) : bytes.length;
+      const link = f.webViewLink ?? `https://drive.google.com/file/d/${f.id}/view`;
+      return {
+        text: `Uploaded "${f.name ?? a.name}" (${f.mimeType ?? mimeType}, ${sizeText(size)}): ${link} (id ${f.id})`,
+        structured: { fileId: f.id, name: f.name ?? a.name, mimeType: f.mimeType ?? mimeType, size, webViewLink: link, parents: f.parents ?? [] },
+      };
     },
   }),
 

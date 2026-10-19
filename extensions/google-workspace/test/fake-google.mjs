@@ -114,7 +114,8 @@ const page = (items, q, def, max) => {
 function parseMultipart(body, contentType) {
   const boundary = /boundary=("?)([^";]+)\1/.exec(contentType ?? "")?.[2];
   if (!boundary) return null;
-  const text = body.toString("utf8");
+  // latin1 maps bytes 1:1 to characters, so binary media survives the split.
+  const text = body.toString("latin1");
   const parts = text
     .split(`--${boundary}`)
     .slice(1, -1)
@@ -127,7 +128,7 @@ function parseMultipart(body, contentType) {
           .split("\r\n")
           .map((h) => [h.slice(0, h.indexOf(":")).toLowerCase(), h.slice(h.indexOf(":") + 1).trim()]),
       );
-      return { headers, body: p.slice(sep + 4).replace(/\r\n$/, "") };
+      return { headers, body: Buffer.from(p.slice(sep + 4).replace(/\r\n$/, ""), "latin1") };
     });
   return parts.length === 2 ? parts : null;
 }
@@ -236,10 +237,11 @@ export async function startFakeGoogle(fixture) {
     let mimeType = meta.mimeType ?? media?.type ?? "application/octet-stream";
     if (meta.mimeType === DOC && media) {
       if (!/^text\/(markdown|plain|html)/.test(media.type)) return json(res, 400, errors.drive(400, "badContent", `Unsupported content with type: ${media.type}`));
-      docs.set(id, Object.assign(new FakeDoc(id, meta.name ?? "Untitled document", bodyFromMarkdown(media.body)), { exportMarkdown: media.type.startsWith("text/markdown") ? media.body.trim() + "\n" : null }));
+      const text = media.body.toString("utf8");
+      docs.set(id, Object.assign(new FakeDoc(id, meta.name ?? "Untitled document", bodyFromMarkdown(text)), { exportMarkdown: media.type.startsWith("text/markdown") ? text.trim() + "\n" : null }));
     } else if (meta.mimeType === DOC) {
       docs.set(id, Object.assign(new FakeDoc(id, meta.name ?? "Untitled document", []), { exportMarkdown: null }));
-    } else if (media) mimeType = media.type.split(";")[0];
+    } else if (media) mimeType = meta.mimeType ?? media.type.split(";")[0];
     for (const p of meta.parents ?? []) if (p !== "root" && !files.has(p)) return notFoundFile(res, p);
     const now = new Date().toISOString();
     const f = {
@@ -254,6 +256,7 @@ export async function startFakeGoogle(fixture) {
       webViewLink: mimeType === DOC ? `https://docs.google.com/document/d/${id}/edit?usp=drivesdk` : mimeType === FOLDER ? `https://drive.google.com/drive/folders/${id}` : `https://drive.google.com/file/d/${id}/view?usp=drivesdk`,
       capabilities: { canEdit: true, canComment: true, canDownload: true },
       _appCreated: true,
+      ...(media && meta.mimeType !== DOC ? { size: String(media.body.length), _bytes: media.body } : {}),
     };
     files.set(id, f);
     return json(res, 200, publicFile(f));
@@ -298,7 +301,9 @@ export async function startFakeGoogle(fixture) {
       if (req.query.get("uploadType") !== "multipart") return json(res, 400, errors.drive(400, "invalid", "Invalid upload type"));
       const parts = parseMultipart(req.body, req.contentType);
       if (!parts || !/^application\/json/.test(parts[0].headers["content-type"] ?? "")) return json(res, 400, errors.drive(400, "badMultipart", "Bad multipart request"));
-      return createFile(res, JSON.parse(parts[0].body), { type: parts[1].headers["content-type"] ?? "application/octet-stream", body: parts[1].body });
+      const meta = JSON.parse(parts[0].body.toString("utf8"));
+      if (typeof meta.mimeType === "string" && meta.mimeType.startsWith("application/vnd.google-apps.") && meta.mimeType !== DOC) return json(res, 400, errors.drive(400, "badContent", "The fake converts uploads to Google Docs only."));
+      return createFile(res, meta, { type: parts[1].headers["content-type"] ?? "application/octet-stream", body: parts[1].body });
     }
     const m = /^\/drive\/v3\/files\/([^/]+)(?:\/(.*))?$/.exec(p);
     if (!m) return json(res, 404, errors.drive(404, "notFound", "Not Found"));

@@ -3,7 +3,7 @@ export { APIS, GoogleError, HttpGoogleClient, MAX_RESPONSE_BYTES, checkedUrl, cl
 export { cellRequests, chunkRequests, findHeading, resolveAnchor } from "./docs-write.ts";
 export { headingsOf, parseInline, parseMarkdown, splitRow, stripDataImages } from "./markdown.ts";
 export { searchQuery } from "./drive.ts";
-export { multipart } from "./docs.ts";
+export { multipart } from "./util.ts";
 export { fileId, pageText, qString, rfc3339, toCsv } from "./util.ts";
 export { parseExpiry } from "./host.ts";
 export { allTools } from "./registry.ts";

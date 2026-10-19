@@ -199,6 +199,41 @@ describe("drive tools", () => {
     assert.equal(sub.isError, false);
   });
 
+  it("drive_upload stores bytes as they are, typed from the name, in the folder", async () => {
+    // A 1x1 PNG, as an agent (or the smoke run's Slides image step) would send it.
+    const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==", "base64");
+    const r = await s.call("drive_upload", { name: "dot.png", folderId: IDS.folder, content_base64: png.toString("base64") });
+    assert.equal(r.isError, false, r.text);
+    const up = last((x) => x.path === "/upload/drive/v3/files");
+    assert.equal(up.query.get("uploadType"), "multipart");
+    assert.equal(up.query.get("fields"), "id,name,mimeType,size,webViewLink,parents");
+    assert.match(up.body.toString("latin1"), /\{"name":"dot\.png","mimeType":"image\/png","parents":\["1fOlDeRpLaNnInG0000000000000000aa"\]\}\r\n--xaq-[0-9a-f]+\r\nContent-Type: image\/png\r\n\r\n/);
+    const stored = s.fake.state.files.get(r.structured.fileId);
+    assert.ok(stored._bytes.equals(png), "the bytes arrive unchanged");
+    assert.deepEqual(r.structured, { fileId: stored.id, name: "dot.png", mimeType: "image/png", size: png.length, webViewLink: `https://drive.google.com/file/d/${stored.id}/view?usp=drivesdk`, parents: [IDS.folder] });
+    assert.match(r.text, /^Uploaded "dot\.png" \(image\/png, 70 B\): https:\/\/drive\.google\.com\/file\/d\/\S+ \(id \S+\)$/);
+    const typed = await s.call("drive_upload", { name: "notes", mimeType: "text/plain", content_base64: Buffer.from("héllo").toString("base64") });
+    assert.equal(typed.structured.mimeType, "text/plain");
+    assert.equal(s.fake.state.files.get(typed.structured.fileId)._bytes.toString("utf8"), "héllo");
+    const unknown = await s.call("drive_upload", { name: "blob.bin", content_base64: "AAEC" });
+    assert.equal(unknown.structured.mimeType, "application/octet-stream");
+  });
+
+  it("drive_upload refuses Google-native types, bad base64 and more than 5 MB, before any request", async () => {
+    const before = s.fake.requests().length;
+    const native = await s.call("drive_upload", { name: "x", mimeType: "application/vnd.google-apps.document", content_base64: "AAAA" });
+    assert.match(native.text, /can't make Google Docs, Sheets or Slides files\. Use docs_create/);
+    const bad = await s.call("drive_upload", { name: "x.png", content_base64: "not base64!" });
+    assert.equal(bad.text, "content_base64 isn't valid base64.");
+    const big = await s.call("drive_upload", { name: "big.bin", content_base64: Buffer.alloc(5 * 1024 * 1024 + 1).toString("base64") });
+    assert.equal(big.isError, true);
+    assert.match(big.text, /at most 5 MB/);
+    assert.equal(s.fake.requests().length, before);
+    const exact = await s.call("drive_upload", { name: "five.bin", content_base64: Buffer.alloc(5 * 1024 * 1024, 1).toString("base64") });
+    assert.equal(exact.isError, false, exact.text);
+    assert.equal(exact.structured.size, 5 * 1024 * 1024);
+  });
+
   it("drive_trash moves a file the extension created to the Trash, and refuses others in plain words", async () => {
     const folder = await s.call("drive_create_folder", { name: "to trash" });
     const doc = await s.call("docs_create", { title: "Temp", markdown: "x", folderId: folder.structured.folderId });

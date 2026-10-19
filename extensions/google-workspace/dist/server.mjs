@@ -36367,6 +36367,7 @@ var InputError = class extends Error {
 };
 
 // extensions/google-workspace/src/util.ts
+import { randomBytes } from "node:crypto";
 var MIME = {
   doc: "application/vnd.google-apps.document",
   sheet: "application/vnd.google-apps.spreadsheet",
@@ -36441,6 +36442,56 @@ function sizeText(bytes) {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+function multipart(metadata, media, mediaType) {
+  const boundary = `xaq-${randomBytes(12).toString("hex")}`;
+  const body = Buffer.concat([
+    Buffer.from(`--${boundary}\r
+Content-Type: application/json; charset=UTF-8\r
+\r
+${JSON.stringify(metadata)}\r
+--${boundary}\r
+Content-Type: ${mediaType}\r
+\r
+`, "utf8"),
+    typeof media === "string" ? Buffer.from(media, "utf8") : media,
+    Buffer.from(`\r
+--${boundary}--\r
+`, "utf8")
+  ]);
+  return { body, contentType: `multipart/related; boundary=${boundary}` };
+}
+var BY_EXTENSION = {
+  png: "image/png",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  gif: "image/gif",
+  webp: "image/webp",
+  svg: "image/svg+xml",
+  pdf: "application/pdf",
+  txt: "text/plain",
+  md: "text/markdown",
+  csv: "text/csv",
+  tsv: "text/tab-separated-values",
+  html: "text/html",
+  htm: "text/html",
+  json: "application/json",
+  xml: "application/xml",
+  zip: "application/zip",
+  mp3: "audio/mpeg",
+  mp4: "video/mp4",
+  docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  doc: "application/msword",
+  xls: "application/vnd.ms-excel",
+  ppt: "application/vnd.ms-powerpoint",
+  odt: "application/vnd.oasis.opendocument.text",
+  rtf: "application/rtf"
+};
+function mimeFromName(name) {
+  const ext = /\.([A-Za-z0-9]{1,8})$/.exec(name.trim())?.[1]?.toLowerCase();
+  return ext && BY_EXTENSION[ext] || "application/octet-stream";
 }
 function qString(s) {
   return `'${s.replace(/\\/g, "\\\\").replace(/'/g, "\\'")}'`;
@@ -36527,6 +36578,8 @@ var FORMATS = {
 var TEXT_FORMATS = /* @__PURE__ */ new Set(["markdown", "text", "csv"]);
 var exportFormats = (mimeType) => Object.keys(FORMATS[mimeType ?? ""] ?? {});
 var MAX_BASE64_BYTES = 3 * 1024 * 1024;
+var MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
+var MAX_UPLOAD_BASE64 = Math.ceil(MAX_UPLOAD_BYTES / 3) * 4 + 1024;
 async function sheetCsv(g, id, tab) {
   const meta3 = await g.json("GET", `${SHEETS}/spreadsheets/${encodeURIComponent(id)}`, { query: { fields: "sheets.properties(sheetId,title,index,sheetType,gridProperties(rowCount,columnCount))" } });
   let tabs = (meta3.sheets ?? []).map((s) => s.properties ?? {}).filter((p) => (p.sheetType ?? "GRID") === "GRID" && typeof p.title === "string");
@@ -36726,6 +36779,38 @@ var driveTools = [
       if (!f.id) throw new Error("Drive didn't return the new folder's id");
       const link = f.webViewLink ?? `https://drive.google.com/drive/folders/${f.id}`;
       return { text: `Created folder "${f.name ?? a.name}": ${link} (id ${f.id})`, structured: { folderId: f.id, name: f.name ?? a.name, webViewLink: link, parents: f.parents ?? [] } };
+    }
+  }),
+  tool({
+    name: "drive_upload",
+    title: "Upload a file to Drive",
+    description: "Upload a file to Google Drive as it is (no conversion: use docs_create for a Google Doc), at the top of My Drive or in a folder, and get its id and link, for example to share a link by email. The content is base64 and at most 5 MB once decoded (the limit keeps the call within xaq's message size). The type is guessed from the name's extension when mimeType is missing.",
+    risk: "write",
+    input: {
+      name: external_exports.string().min(1).max(500).describe("The file's name, with its extension (e.g. chart.png)."),
+      folderId: external_exports.string().min(1).max(2048).optional().describe("Put it in this folder (id or link). Default: the top of My Drive."),
+      mimeType: external_exports.string().regex(/^[\w.+-]+\/[\w.+-]+$/).max(200).optional().describe("The file's MIME type, e.g. image/png. Default: guessed from the name. Google Docs, Sheets and Slides types aren't accepted."),
+      content_base64: external_exports.string().min(1).max(MAX_UPLOAD_BASE64).describe("The file's bytes, base64-encoded (at most 5 MB decoded).")
+    },
+    async run(a, g) {
+      const mimeType = a.mimeType ?? mimeFromName(a.name);
+      if (mimeType.startsWith("application/vnd.google-apps.")) throw new InputError("drive_upload stores files as they are; it can't make Google Docs, Sheets or Slides files. Use docs_create (or the Sheets and Slides create tools) instead.");
+      const b64 = a.content_base64.replace(/\s+/g, "");
+      if (!/^[A-Za-z0-9+/]*={0,2}$/.test(b64) || b64.length % 4 === 1) throw new InputError("content_base64 isn't valid base64.");
+      const bytes = Buffer.from(b64, "base64");
+      if (bytes.length > MAX_UPLOAD_BYTES) throw new InputError(`That's ${sizeText(bytes.length)}; drive_upload takes at most 5 MB.`);
+      const metadata = { name: a.name, mimeType };
+      if (a.folderId) metadata.parents = [fileId(a.folderId, "folder id", true)];
+      const { body, contentType } = multipart(metadata, bytes, mimeType);
+      const res = await g.bytes("POST", `${DRIVE_UPLOAD}/files`, { query: { uploadType: "multipart", fields: "id,name,mimeType,size,webViewLink,parents", supportsAllDrives: true }, body, contentType });
+      const f = JSON.parse(res.data.toString("utf8"));
+      if (!f.id) throw new Error("Drive didn't return the new file's id");
+      const size = f.size !== void 0 ? Number(f.size) : bytes.length;
+      const link = f.webViewLink ?? `https://drive.google.com/file/d/${f.id}/view`;
+      return {
+        text: `Uploaded "${f.name ?? a.name}" (${f.mimeType ?? mimeType}, ${sizeText(size)}): ${link} (id ${f.id})`,
+        structured: { fileId: f.id, name: f.name ?? a.name, mimeType: f.mimeType ?? mimeType, size, webViewLink: link, parents: f.parents ?? [] }
+      };
     }
   }),
   tool({
@@ -36953,7 +37038,6 @@ async function writeBlocks(g, doc, anchor2, blocks, prefix = []) {
 }
 
 // extensions/google-workspace/src/docs.ts
-import { randomBytes } from "node:crypto";
 var docArg = external_exports.string().min(1).max(2048).describe("The Google Doc: its id, or its link.");
 var markdownArg = external_exports.string().max(1e6);
 async function requireDoc(g, id) {
@@ -36963,23 +37047,6 @@ async function requireDoc(g, id) {
     throw new InputError(`"${f.name}" is a ${typeName(f.mimeType)}, not a Google Doc.${hint}`);
   }
   return f;
-}
-function multipart(metadata, media, mediaType) {
-  const boundary = `xaq-${randomBytes(12).toString("hex")}`;
-  const body = Buffer.from(
-    `--${boundary}\r
-Content-Type: application/json; charset=UTF-8\r
-\r
-${JSON.stringify(metadata)}\r
---${boundary}\r
-Content-Type: ${mediaType}\r
-\r
-${media}\r
---${boundary}--\r
-`,
-    "utf8"
-  );
-  return { body, contentType: `multipart/related; boundary=${boundary}` };
 }
 var writeSummary = (verb, title, id, r) => `${verb} ${r.paragraphs} paragraph${r.paragraphs === 1 ? "" : "s"}${r.tables ? ` and ${r.tables} table${r.tables === 1 ? "" : "s"}` : ""} in "${title}": ${docUrl(id)}`;
 function blocksOf(markdown, allowEmpty = false) {

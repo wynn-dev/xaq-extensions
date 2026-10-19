@@ -52,6 +52,7 @@
       "drive_get": { "class": "read", "target": "/fileId" },
       "drive_export": { "class": "read", "target": "/fileId" },
       "drive_create_folder": { "class": "write" },
+      "drive_upload": { "class": "write" },
       "drive_trash": { "class": "risky", "target": "/fileId" },
       "docs_read": { "class": "read", "target": "/documentId" },
       "docs_create": { "class": "write" },
