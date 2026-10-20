@@ -75,6 +75,42 @@ describe("docs tools", () => {
     assert.equal(joined, whole);
   });
 
+  it("docs_read falls back to plain text when the markdown export is over Drive's 10 MB limit", async () => {
+    s.fake.state.tooLargeToExport.add(`${IDS.notes} text/markdown`);
+    try {
+      const r = await s.call("docs_read", { documentId: IDS.notes });
+      assert.equal(r.isError, false, r.text);
+      const exports = s.fake.requests().filter((x) => x.path.endsWith("/export")).slice(-2).map((x) => x.query.get("mimeType"));
+      assert.deepEqual(exports, ["text/markdown", "text/plain"]);
+      assert.match(r.text, /\[As plain text: the markdown export, which embeds the images, is over Google's 10 MB export limit\./);
+      assert.match(r.text, /\n\nQ3 Planning Notes\nGoals\nShip the billing revamp\n/);
+      assert.equal(r.structured.format, "text");
+      assert.equal(r.structured.headings, undefined);
+    } finally {
+      s.fake.state.tooLargeToExport.delete(`${IDS.notes} text/markdown`);
+    }
+    assert.equal((await s.call("docs_read", { documentId: IDS.notes })).structured.format, "markdown");
+  });
+
+  it("a result too big for one message is cut to 4 MB with a note, structured copy dropped, and the child lives on", async () => {
+    // 100 comments of 50,000 characters each: 5 MB of text and as much again as structuredContent.
+    const big = Array.from({ length: 100 }, (_, i) => ({ kind: "drive#comment", id: `AAAAbig${String(i).padStart(4, "0")}`, createdTime: "2026-10-01T00:00:00.000Z", author: { displayName: "Priya Raman", me: false }, content: `${i}:${"é".repeat(49_990)}`, deleted: false, resolved: false, replies: [] }));
+    s.fake.state.comments.set(IDS.agenda, big);
+    const r = await s.call("docs_comments_list", { documentId: IDS.agenda, pageSize: 100 });
+    assert.equal(r.isError, false);
+    assert.equal(r.raw.structuredContent, undefined);
+    const bytes = Buffer.byteLength(JSON.stringify(r.raw));
+    assert.ok(bytes <= 4_000_000 && bytes > 3_500_000, String(bytes));
+    assert.match(r.text, /\[The structured copy of this result is left out: it's over the 1,000,000 characters xaq passes on\. The text above has the result\.\]/);
+    assert.match(r.text, /\[Cut here: the full answer is [\d,]+ characters, more than the 4 MB returned at once\. Ask for less: pass a smaller maxChars or pageSize/);
+    assert.equal(s.ext.child.exitCode, null, "still running");
+    assert.equal((await s.call("drive_get", { fileId: IDS.notes })).isError, false);
+    // A smaller page fits whole, with the structured copy.
+    const page = await s.call("docs_comments_list", { documentId: IDS.agenda, pageSize: 10 });
+    assert.equal(page.structured.comments.length, 10);
+    assert.doesNotMatch(page.text, /Cut here/);
+  });
+
   it("docs_read refuses a sheet or a shortcut in plain words", async () => {
     const sheet = await s.call("docs_read", { documentId: IDS.budget });
     assert.equal(sheet.isError, true);
@@ -92,7 +128,7 @@ describe("docs tools", () => {
     assert.match(up.contentType, /^multipart\/related; boundary=xaq-[0-9a-f]{24}$/);
     const body = up.body.toString("utf8");
     assert.match(body, /Content-Type: application\/json; charset=UTF-8\r\n\r\n\{"name":"Launch plan","mimeType":"application\/vnd\.google-apps\.document","parents":\["1fOlDeRpLaNnInG0000000000000000aa"\]\}/);
-    assert.match(body, /Content-Type: text\/markdown; charset=UTF-8\r\n\r\n# Launch\n\n- step one\n- step two\r\n/);
+    assert.match(body, /Content-Type: text\/markdown\r\n\r\n# Launch\n\n- step one\n- step two\r\n/);
     const id = r.structured.documentId;
     assert.equal(r.structured.name, "Launch plan");
     assert.equal(s.fake.state.files.get(id).mimeType, "application/vnd.google-apps.document");

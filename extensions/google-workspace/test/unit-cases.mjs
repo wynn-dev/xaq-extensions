@@ -7,7 +7,7 @@ import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 import { lib } from "./unit.mjs";
 
-const { parseMarkdown, parseInline, stripDataImages, headingsOf, chunkRequests, cellRequests, classify, checkedUrl, serviceOf, testOrigin, retryAfterMs, HttpGoogleClient, GoogleError, fileId, pageText, qString, rfc3339, toCsv, searchQuery, multipart, parseExpiry, allTools } = lib;
+const { shapeResult, MAX_RESULT_BYTES, parseMarkdown, parseInline, stripDataImages, headingsOf, chunkRequests, cellRequests, classify, checkedUrl, serviceOf, testOrigin, retryAfterMs, HttpGoogleClient, GoogleError, fileId, pageText, qString, rfc3339, toCsv, searchQuery, multipart, parseExpiry, allTools } = lib;
 
 const manifest = JSON.parse(readFileSync(new URL("../xaq-extension.json", import.meta.url), "utf8"));
 
@@ -15,6 +15,37 @@ describe("risk map", () => {
   it("equals every registered tool's risk and target, in the source", () => {
     const declared = Object.fromEntries(allTools.map((t) => [t.name, { class: t.risk, ...(t.target ? { target: t.target } : {}) }]));
     assert.deepEqual(declared, manifest.risk.tools);
+  });
+});
+
+describe("result size", () => {
+  const size = (r) => Buffer.byteLength(JSON.stringify(r));
+  it("passes a normal result through unchanged", () => {
+    const out = { text: "hi", structured: { a: 1 }, resources: [{ uri: "gdrive-export:x.pdf", mimeType: "application/pdf", blob: "JVBERg==" }] };
+    assert.deepEqual(shapeResult(out), { content: [{ type: "text", text: "hi" }, { type: "resource", resource: { uri: "gdrive-export:x.pdf", mimeType: "application/pdf", blob: "JVBERg==" } }], structuredContent: { a: 1 } });
+  });
+  it("drops a structured copy over xaq's 1,000,000 characters, and says so", () => {
+    const r = shapeResult({ text: "short", structured: { big: "x".repeat(1_000_001) } });
+    assert.equal(r.structuredContent, undefined);
+    assert.match(r.content[0].text, /^short\n\n\[The structured copy of this result is left out: it's over the 1,000,000 characters/);
+  });
+  it("drops structured, then the blob, then cuts multi-byte text, always under the cap", () => {
+    const text = "ü😀\"\n".repeat(1_500_000);
+    const r = shapeResult({ text, structured: { n: "y".repeat(900_000) }, resources: [{ uri: "u", mimeType: "application/pdf", blob: "A".repeat(500_000) }] });
+    assert.ok(size(r) <= MAX_RESULT_BYTES, String(size(r)));
+    assert.ok(size(r) > MAX_RESULT_BYTES * 0.9, "not cut much more than needed");
+    assert.equal(r.structuredContent, undefined);
+    assert.equal(r.content.length, 1);
+    const t = r.content[0].text;
+    assert.ok(text.startsWith(t.slice(0, t.indexOf("\n\n[The structured"))), "a prefix of the original");
+    assert.doesNotMatch(t, /[\uD800-\uDBFF](?![\uDC00-\uDFFF])/, "no split surrogate pair");
+    assert.match(t, /\[The attached file is left out: it would make the answer larger than 4 MB\.\]\n\[Cut here: the full answer is 7,500,000 characters/);
+  });
+  it("keeps a blob that fits when only the structured copy had to go", () => {
+    const r = shapeResult({ text: "t", structured: { n: "z".repeat(900_000) }, resources: [{ uri: "u", mimeType: "image/png", blob: "B".repeat(3_400_000) }] });
+    assert.equal(r.content[1].resource.blob.length, 3_400_000);
+    assert.equal(r.structuredContent, undefined);
+    assert.ok(size(r) <= MAX_RESULT_BYTES);
   });
 });
 

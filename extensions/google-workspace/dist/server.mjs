@@ -36577,7 +36577,7 @@ var FORMATS = {
 };
 var TEXT_FORMATS = /* @__PURE__ */ new Set(["markdown", "text", "csv"]);
 var exportFormats = (mimeType) => Object.keys(FORMATS[mimeType ?? ""] ?? {});
-var MAX_BASE64_BYTES = 3 * 1024 * 1024;
+var MAX_BASE64_BYTES = 2.5 * 1024 * 1024;
 var MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
 var MAX_UPLOAD_BASE64 = Math.ceil(MAX_UPLOAD_BYTES / 3) * 4 + 1024;
 async function sheetCsv(g, id, tab) {
@@ -36710,7 +36710,7 @@ var driveTools = [
   tool({
     name: "drive_export",
     title: "Export a Google Doc, Sheet or Slides file",
-    description: "Get a Google Doc, Sheet or Slides file's content in another format. Text formats come back as text, in pages: doc → markdown or text; sheet → csv (one CSV per tab, or pass tab); slides → text. Binary formats (pdf, docx, xlsx, pptx) come back as their size, plus the bytes as base64 only when includeBase64 is true and the file is at most 3 MB. To email a file, attach it from Drive by its id instead.",
+    description: "Get a Google Doc, Sheet or Slides file's content in another format. Text formats come back as text, in pages: doc → markdown or text; sheet → csv (one CSV per tab, or pass tab); slides → text. Binary formats (pdf, docx, xlsx, pptx) come back as their size, plus the file attached as an embedded resource (base64) only when includeBase64 is true and it is at most 2.5 MB. To email a file, attach it from Drive by its id instead.",
     risk: "read",
     target: "/fileId",
     input: {
@@ -36719,7 +36719,7 @@ var driveTools = [
       tab: external_exports.string().min(1).max(200).optional().describe("For csv: only this tab (by name). Default: every tab."),
       offset: external_exports.number().int().min(0).default(0).describe("For text formats: the character to start at (nextOffset from the previous page)."),
       maxChars: external_exports.number().int().min(1e3).max(1e5).default(2e4).describe("For text formats: the most characters to return."),
-      includeBase64: external_exports.boolean().default(false).describe("For binary formats: also return the file as base64 (at most 3 MB).")
+      includeBase64: external_exports.boolean().default(false).describe("For binary formats: also attach the file as an embedded resource, base64 (at most 2.5 MB).")
     },
     async run(a, g) {
       const id = fileId(a.fileId);
@@ -36755,11 +36755,13 @@ var driveTools = [
       }
       const res = await g.bytes("GET", `${DRIVE}/files/${encodeURIComponent(id)}/export`, { query: { mimeType: mime } });
       const size = res.data.length;
-      const fits = size <= MAX_BASE64_BYTES;
-      const note = a.includeBase64 ? fits ? "The file is in structuredContent.base64." : `It's over 3 MB, so it isn't returned here.` : "Its bytes aren't returned (pass includeBase64: true for files up to 3 MB).";
+      const attach = a.includeBase64 && size <= MAX_BASE64_BYTES;
+      const uri = `gdrive-export:${id}.${a.format}`;
+      const note = attach ? `The file is attached to this result as an embedded resource (${uri}, ${mime}, base64).` : a.includeBase64 ? "It's over 2.5 MB, so it isn't attached." : "Its bytes aren't returned (pass includeBase64: true to attach files up to 2.5 MB).";
       return {
         text: `Exported "${f.name}" as ${a.format}: ${sizeText(size)}. ${note} To send it by email, attach the Drive file by its id (${id}) rather than the export.`,
-        structured: { ...base, mimeType: mime, size, ...a.includeBase64 && fits ? { base64: res.data.toString("base64") } : {} }
+        structured: { ...base, mimeType: mime, size, attached: attach, ...attach ? { resourceUri: uri } : {} },
+        ...attach ? { resources: [{ uri, mimeType: mime, blob: res.data.toString("base64") }] } : {}
       };
     }
   }),
@@ -37070,10 +37072,20 @@ var docsTools = [
     async run(a, g) {
       const id = fileId(a.documentId, "Doc id");
       const f = await requireDoc(g, id);
-      const { text, omitted } = stripDataImages(await exportText(g, id, "text/markdown"));
+      let format = "markdown";
+      let raw;
+      try {
+        raw = await exportText(g, id, "text/markdown");
+      } catch (err) {
+        if (!(err instanceof GoogleError && err.code === "too_large")) throw err;
+        raw = await exportText(g, id, "text/plain");
+        format = "text";
+      }
+      const { text, omitted } = format === "markdown" ? stripDataImages(raw) : { text: raw, omitted: 0 };
       const page = pageText(text, a.offset, a.maxChars);
-      const headings = page.offset === 0 ? headingsOf(text) : void 0;
-      const head = `"${f.name}" (modified ${f.modifiedTime ?? "?"}) ${f.webViewLink ?? docUrl(id)}`;
+      const headings = page.offset === 0 && format === "markdown" ? headingsOf(text) : void 0;
+      const fallback = format === "text" ? "\n[As plain text: the markdown export, which embeds the images, is over Google's 10 MB export limit. Headings, lists and links aren't marked.]" : "";
+      const head = `"${f.name}" (modified ${f.modifiedTime ?? "?"}) ${f.webViewLink ?? docUrl(id)}${fallback}`;
       const range2 = page.total > page.text.length ? `
 [Characters ${page.offset}–${page.offset + page.text.length} of ${page.total}.${page.nextOffset !== null ? ` More: call docs_read again with offset ${page.nextOffset}.` : " End of document."}]` : "";
       const outline = headings && page.nextOffset !== null && headings.length ? `
@@ -37090,6 +37102,7 @@ ${page.text}`,
           offset: page.offset,
           nextOffset: page.nextOffset,
           totalChars: page.total,
+          format,
           ...headings ? { headings } : {},
           ...omitted ? { imagesOmitted: omitted } : {}
         }
@@ -37112,7 +37125,7 @@ ${page.text}`,
       const query = { fields: "id,name,mimeType,webViewLink", supportsAllDrives: true };
       let created;
       if (a.markdown.trim()) {
-        const { body, contentType } = multipart(metadata, a.markdown, "text/markdown; charset=UTF-8");
+        const { body, contentType } = multipart(metadata, a.markdown, "text/markdown");
         const res = await g.bytes("POST", `${DRIVE_UPLOAD}/files`, { query: { ...query, uploadType: "multipart" }, body, contentType });
         created = JSON.parse(res.data.toString("utf8"));
       } else {
@@ -37287,16 +37300,63 @@ for (const t of allTools) {
 // extensions/google-workspace/src/mcp.ts
 var SERVER_NAME = "xaq-google-workspace";
 var VERSION = "1.0.0";
+var MAX_RESULT_BYTES = 4e6;
+var MAX_STRUCTURED_CHARS = 1e6;
 var INSTRUCTIONS = [
-  "Google Drive and Google Docs for this account (Sheets and Slides tools too, when listed).",
+  "Google Drive, Docs, Sheets and Slides for this account.",
   "Find files with drive_search or drive_list_folder; every other tool takes a file id or the file's Google link.",
   "Docs are read and written as markdown. docs_read pages long documents: pass nextOffset as offset.",
   "Edits: docs_append, docs_insert (at a heading), docs_replace_text; docs_overwrite replaces everything and asks first."
 ].join(" ");
+var LESS = "Ask for less: pass a smaller maxChars or pageSize, a narrower range, or continue from an offset or pageToken.";
+var bytesOf = (r) => Buffer.byteLength(JSON.stringify(r), "utf8");
+var cut = (s, n) => {
+  let t = s.slice(0, Math.max(0, n));
+  if (/[\uD800-\uDBFF]$/.test(t)) t = t.slice(0, -1);
+  return t;
+};
+function shapeResult(out, maxBytes = MAX_RESULT_BYTES) {
+  const notes = [];
+  let structured = out.structured;
+  if (structured !== void 0 && JSON.stringify(structured).length > MAX_STRUCTURED_CHARS) {
+    structured = void 0;
+    notes.push("[The structured copy of this result is left out: it's over the 1,000,000 characters xaq passes on. The text above has the result.]");
+  }
+  let resources = out.resources ?? [];
+  let text = out.text;
+  const build = () => ({
+    content: [{ type: "text", text: notes.length ? `${text}
+
+${notes.join("\n")}` : text }, ...resources.map((r) => ({ type: "resource", resource: { uri: r.uri, mimeType: r.mimeType, blob: r.blob } }))],
+    ...structured !== void 0 ? { structuredContent: structured } : {}
+  });
+  let result = build();
+  if (bytesOf(result) <= maxBytes) return result;
+  if (structured !== void 0) {
+    structured = void 0;
+    notes.push("[The structured copy of this result is left out to keep the answer under 4 MB. The text above has the result.]");
+    result = build();
+    if (bytesOf(result) <= maxBytes) return result;
+  }
+  if (resources.length) {
+    resources = [];
+    notes.push("[The attached file is left out: it would make the answer larger than 4 MB.]");
+    result = build();
+    if (bytesOf(result) <= maxBytes) return result;
+  }
+  const total = text.length;
+  notes.push(`[Cut here: the full answer is ${total.toLocaleString("en-US")} characters, more than the 4 MB returned at once. ${LESS}]`);
+  for (let i = 0; i < 20 && bytesOf(result) > maxBytes; i++) {
+    const over = bytesOf(result) - maxBytes;
+    const ratio = text.length / Math.max(1, Buffer.byteLength(JSON.stringify(text), "utf8"));
+    text = cut(text, text.length - Math.ceil(over * ratio) - 1024);
+    result = build();
+  }
+  return result;
+}
 async function toolResult(t, args, g) {
   try {
-    const out = await t.run(args, g);
-    return { content: [{ type: "text", text: out.text }], ...out.structured ? { structuredContent: out.structured } : {} };
+    return shapeResult(await t.run(args, g));
   } catch (err) {
     if (err instanceof GoogleError || err instanceof InputError) return { isError: true, content: [{ type: "text", text: err.message }] };
     const msg = String(err?.message ?? err).slice(0, 300);
