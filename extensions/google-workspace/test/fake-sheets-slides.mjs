@@ -720,7 +720,7 @@ function slidesBatch(state, pr, requests) {
 function publiclyFetchable(state, url) {
   const u = new URL(url);
   if (u.hostname.endsWith("googleusercontent.com") && u.pathname.startsWith("/drive-storage/")) return false;
-  if (u.hostname !== "drive.google.com") return true;
+  if (u.hostname !== "drive.google.com" && u.hostname !== "drive.usercontent.google.com") return true;
   const id = u.searchParams.get("id") ?? /\/d\/([A-Za-z0-9_-]+)/.exec(u.pathname)?.[1];
   const f = id && state.driveFiles.get(id);
   if (!f || !(f._permissions ?? f.permissions ?? []).some((p) => p.type === "anyone")) return false;
@@ -773,7 +773,14 @@ function handleDrive(state, method, rest, query) {
   const id = decodeURIComponent(rest[0]);
   const f = state.driveFiles.get(id);
   if (!f) throw new ApiError(404, `File not found: ${id}.`);
-  if (method === "GET") return { status: 200, body: render(f) };
+  if (method === "GET") {
+    // Drive gives binary (non-Google-Apps) files a download link; `_noWebContentLink` seeds one without.
+    const out = render(f);
+    if (!out.webContentLink && !f._noWebContentLink && f.mimeType && !f.mimeType.startsWith("application/vnd.google-apps.")) {
+      out.webContentLink = `https://drive.usercontent.google.com/download?id=${encodeURIComponent(f.id)}&export=download`;
+    }
+    return { status: 200, body: out };
+  }
   if (method !== "PATCH") throw new ApiError(405, "Method not allowed");
   // files.update, parents only: drive.file lets the app change files it created, nothing else.
   if (!f._appCreated) throw new ApiError(403, `The user has not granted the app 123456789012 write access to the file ${id}.`);

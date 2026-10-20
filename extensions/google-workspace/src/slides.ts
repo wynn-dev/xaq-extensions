@@ -341,26 +341,43 @@ interface DriveImage {
   mimeType?: string;
   size?: string;
   resourceKey?: string;
+  webContentLink?: string;
   permissions?: { type?: string; role?: string }[];
 }
 
+/** Hosts a Drive download link (webContentLink) may be on. */
+const DRIVE_LINK_HOSTS = new Set(["drive.google.com", "drive.usercontent.google.com"]);
+
 /**
- * The URL to give Google for a Drive image: its public download link, which works only for a file shared as "anyone
- * with the link" (Slides fetches images without credentials). Drive lists a file's permissions only to someone who
- * can share it; when it does and none is "anyone", the file is refused here, before Slides is called. Otherwise
- * Slides' own refusal is mapped to the same message (imageError).
+ * The URL to give Google for a Drive image: the file's download link, which works only for a file shared as "anyone
+ * with the link" (Slides fetches images without credentials). It's Drive's own `webContentLink` when Drive returns
+ * one on an https Drive host (Google is retiring the hand-built /uc form); the /uc link is only the fallback for a
+ * file without one. The resource key goes on either if the link lacks it. Drive lists a file's permissions only to
+ * someone who can share it; when it does and none is "anyone", the file is refused here, before Slides is called.
+ * Otherwise Slides' own refusal is mapped to the same message (imageError).
  */
 export async function driveImageUrl(g: GoogleClient, fileId: string): Promise<{ url: string; name: string }> {
   const f = await g.json<DriveImage>("GET", `${DRIVE_FILES_BASE}/${enc(fileId)}`, {
-    query: { fields: "id,name,mimeType,size,resourceKey,permissions(type,role)", supportsAllDrives: true },
+    query: { fields: "id,name,mimeType,size,resourceKey,webContentLink,permissions(type,role)", supportsAllDrives: true },
   });
   const name = f.name ?? fileId;
   if (!f.mimeType || !IMAGE_TYPES.has(f.mimeType)) throw new InputError(`"${name}" is ${f.mimeType ?? "of an unknown type"}; Slides takes PNG, JPEG or GIF images.`);
   if (f.size !== undefined && Number(f.size) >= 50 * 1024 * 1024) throw new InputError(`"${name}" is over the 50 MB Slides accepts.`);
   if (f.permissions && !f.permissions.some((p) => p.type === "anyone")) throw new InputError(NOT_PUBLIC);
-  let url = `https://drive.google.com/uc?export=download&id=${enc(f.id ?? fileId)}`;
-  if (f.resourceKey) url += `&resourcekey=${enc(f.resourceKey)}`;
-  return { url, name };
+  let link: URL | null = null;
+  if (f.webContentLink) {
+    try {
+      link = new URL(f.webContentLink);
+    } catch {
+      link = null;
+    }
+    if (link && (link.protocol !== "https:" || !DRIVE_LINK_HOSTS.has(link.hostname) || link.username || link.password || link.port)) {
+      throw new InputError(`Drive returned an unexpected download link for "${name}".`);
+    }
+  }
+  if (!link) link = new URL(`https://drive.google.com/uc?export=download&id=${enc(f.id ?? fileId)}`);
+  if (f.resourceKey && !link.searchParams.has("resourcekey")) link.searchParams.set("resourcekey", f.resourceKey);
+  return { url: link.href, name };
 }
 
 /** Slides' refusal to fetch an image, in plain words; any other error as it was. */

@@ -38043,17 +38043,29 @@ function createImageRequest(objectId, url2, slideId, box) {
 }
 var IMAGE_TYPES = /* @__PURE__ */ new Set(["image/png", "image/jpeg", "image/gif"]);
 var NOT_PUBLIC = `This image isn't shared publicly, and Slides can only insert public images (Google fetches them without signing in). Use an https imageUrl, or share the file as "anyone with the link" in Google Drive yourself: this extension never changes sharing.`;
+var DRIVE_LINK_HOSTS = /* @__PURE__ */ new Set(["drive.google.com", "drive.usercontent.google.com"]);
 async function driveImageUrl(g, fileId2) {
   const f = await g.json("GET", `${DRIVE_FILES_BASE}/${enc2(fileId2)}`, {
-    query: { fields: "id,name,mimeType,size,resourceKey,permissions(type,role)", supportsAllDrives: true }
+    query: { fields: "id,name,mimeType,size,resourceKey,webContentLink,permissions(type,role)", supportsAllDrives: true }
   });
   const name = f.name ?? fileId2;
   if (!f.mimeType || !IMAGE_TYPES.has(f.mimeType)) throw new InputError(`"${name}" is ${f.mimeType ?? "of an unknown type"}; Slides takes PNG, JPEG or GIF images.`);
   if (f.size !== void 0 && Number(f.size) >= 50 * 1024 * 1024) throw new InputError(`"${name}" is over the 50 MB Slides accepts.`);
   if (f.permissions && !f.permissions.some((p) => p.type === "anyone")) throw new InputError(NOT_PUBLIC);
-  let url2 = `https://drive.google.com/uc?export=download&id=${enc2(f.id ?? fileId2)}`;
-  if (f.resourceKey) url2 += `&resourcekey=${enc2(f.resourceKey)}`;
-  return { url: url2, name };
+  let link = null;
+  if (f.webContentLink) {
+    try {
+      link = new URL(f.webContentLink);
+    } catch {
+      link = null;
+    }
+    if (link && (link.protocol !== "https:" || !DRIVE_LINK_HOSTS.has(link.hostname) || link.username || link.password || link.port)) {
+      throw new InputError(`Drive returned an unexpected download link for "${name}".`);
+    }
+  }
+  if (!link) link = new URL(`https://drive.google.com/uc?export=download&id=${enc2(f.id ?? fileId2)}`);
+  if (f.resourceKey && !link.searchParams.has("resourcekey")) link.searchParams.set("resourcekey", f.resourceKey);
+  return { url: link.href, name };
 }
 function imageError(err, fromDrive) {
   const e = err;

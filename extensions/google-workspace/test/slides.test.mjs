@@ -314,16 +314,25 @@ function defineTests(lib) {
       assert.ok(fake.state.requests.every((r) => r.host === "slides.googleapis.com"), "the extension never fetches the image itself");
     });
 
-    it("slides_insert_image takes an explicit box, and a Drive image shared with anyone through its public link", async () => {
+    it("slides_insert_image takes an explicit box, and a Drive image shared with anyone through Drive's webContentLink", async () => {
       fake.state.driveFiles.set(DRIVE_IMG, { id: DRIVE_IMG, name: "logo.png", mimeType: "image/png", size: "20480", resourceKey: "0-abcRK", permissions: [{ type: "anyone", role: "reader" }, { type: "user", role: "owner" }] });
       const out = await call("slides_insert_image", { presentationId: DECK, slideId: "g_title", driveFileId: `https://drive.google.com/file/d/${DRIVE_IMG}/view`, box: { x: 600, y: 20, width: 100, height: 50 } });
       const drive = fake.state.requests.find((r) => r.host === "www.googleapis.com");
       assert.equal(drive.path, `/drive/v3/files/${DRIVE_IMG}`);
-      assert.deepEqual(drive.query, { fields: "id,name,mimeType,size,resourceKey,permissions(type,role)", supportsAllDrives: "true" });
+      assert.deepEqual(drive.query, { fields: "id,name,mimeType,size,resourceKey,webContentLink,permissions(type,role)", supportsAllDrives: "true" });
       const req = batches()[0].body.requests[0].createImage;
-      assert.equal(req.url, `https://drive.google.com/uc?export=download&id=${DRIVE_IMG}&resourcekey=0-abcRK`);
+      assert.equal(req.url, `https://drive.usercontent.google.com/download?id=${DRIVE_IMG}&export=download&resourcekey=0-abcRK`);
       assert.deepEqual(out.structured.box, { x: 600, y: 20, width: 100, height: 50 });
       assert.match(out.text, /Drive image "logo.png"/);
+    });
+
+    it("slides_insert_image falls back to the /uc link only when Drive gives no webContentLink, and refuses an odd one", async () => {
+      fake.state.driveFiles.set(DRIVE_IMG, { id: DRIVE_IMG, name: "logo.png", mimeType: "image/png", _noWebContentLink: true, resourceKey: "0-abcRK", permissions: [{ type: "anyone", role: "reader" }] });
+      await call("slides_insert_image", { presentationId: DECK, slideId: "g_title", driveFileId: DRIVE_IMG });
+      assert.equal(batches()[0].body.requests[0].createImage.url, `https://drive.google.com/uc?export=download&id=${DRIVE_IMG}&resourcekey=0-abcRK`);
+      fake.state.driveFiles.set(DRIVE_IMG, { id: DRIVE_IMG, name: "logo.png", mimeType: "image/png", webContentLink: "https://evil.example/download?id=x", permissions: [{ type: "anyone", role: "reader" }] });
+      await assert.rejects(call("slides_insert_image", { presentationId: DECK, slideId: "g_title", driveFileId: DRIVE_IMG }), /unexpected download link/);
+      assert.equal(batches().length, 1);
     });
 
     it("slides_insert_image refuses a private Drive image before calling Slides", async () => {
@@ -346,7 +355,7 @@ function defineTests(lib) {
     it("the fake refuses Drive thumbnail links and private Drive links, as Slides fetches without credentials", () => {
       const pr = fake.state.presentations.get(DECK);
       fake.state.driveFiles.set(DRIVE_IMG, { id: DRIVE_IMG, name: "p.png", mimeType: "image/png", permissions: [{ type: "user", role: "owner" }] });
-      for (const url of ["https://lh3.googleusercontent.com/drive-storage/AJQWtBabc=s1600", `https://drive.google.com/uc?export=download&id=${DRIVE_IMG}`]) {
+      for (const url of ["https://lh3.googleusercontent.com/drive-storage/AJQWtBabc=s1600", `https://drive.google.com/uc?export=download&id=${DRIVE_IMG}`, `https://drive.usercontent.google.com/download?id=${DRIVE_IMG}&export=download`]) {
         const res = fake.handle("POST", new URL(`https://slides.googleapis.com/v1/presentations/${DECK}:batchUpdate`), { requests: [createImageRequest("img_probe1", url, "g_photo", { x: 0, y: 0, width: 10, height: 10 })] });
         assert.equal(res.status, 400, url);
         assert.match(res.body.error.message, /publicly accessible/);
