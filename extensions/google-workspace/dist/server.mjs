@@ -37073,19 +37073,19 @@ var docsTools = [
     async run(a, g) {
       const id = fileId(a.documentId, "Doc id");
       const f = await requireDoc(g, id);
-      let format = "markdown";
+      let format2 = "markdown";
       let raw;
       try {
         raw = await exportText(g, id, "text/markdown");
       } catch (err) {
         if (!(err instanceof GoogleError && err.code === "too_large")) throw err;
         raw = await exportText(g, id, "text/plain");
-        format = "text";
+        format2 = "text";
       }
-      const { text, omitted } = format === "markdown" ? stripDataImages(raw) : { text: raw, omitted: 0 };
+      const { text, omitted } = format2 === "markdown" ? stripDataImages(raw) : { text: raw, omitted: 0 };
       const page = pageText(text, a.offset, a.maxChars);
-      const headings = page.offset === 0 && format === "markdown" ? headingsOf(text) : void 0;
-      const fallback = format === "text" ? "\n[As plain text: the markdown export, which embeds the images, is over Google's 10 MB export limit. Headings, lists and links aren't marked.]" : "";
+      const headings = page.offset === 0 && format2 === "markdown" ? headingsOf(text) : void 0;
+      const fallback = format2 === "text" ? "\n[As plain text: the markdown export, which embeds the images, is over Google's 10 MB export limit. Headings, lists and links aren't marked.]" : "";
       const head = `"${f.name}" (modified ${f.modifiedTime ?? "?"}) ${f.webViewLink ?? docUrl(id)}${fallback}`;
       const range2 = page.total > page.text.length ? `
 [Characters ${page.offset}–${page.offset + page.text.length} of ${page.total}.${page.nextOffset !== null ? ` More: call docs_read again with offset ${page.nextOffset}.` : " End of document."}]` : "";
@@ -37103,7 +37103,7 @@ ${page.text}`,
           offset: page.offset,
           nextOffset: page.nextOffset,
           totalChars: page.total,
-          format,
+          format: format2,
           ...headings ? { headings } : {},
           ...omitted ? { imagesOmitted: omitted } : {}
         }
