@@ -5,7 +5,7 @@
 // - Comments use the Drive comments API.
 
 import { z } from "zod";
-import { DRIVE, DRIVE_UPLOAD, DOCS, type GoogleClient } from "./google.ts";
+import { DRIVE, DRIVE_UPLOAD, DOCS, GoogleError, type GoogleClient } from "./google.ts";
 import { exportText, getFile, person, type DriveUser } from "./drive.ts";
 import { type Position, docUrl, loadDoc, resolveAnchor, writeBlocks } from "./docs-write.ts";
 import { headingsOf, parseMarkdown, stripDataImages } from "./markdown.ts";
@@ -63,10 +63,22 @@ export const docsTools = [
     async run(a, g) {
       const id = fileId(a.documentId, "Doc id");
       const f = await requireDoc(g, id);
-      const { text, omitted } = stripDataImages(await exportText(g, id, "text/markdown"));
+      // The markdown export embeds every image, so an image-heavy Doc can pass Drive's 10 MB export limit; its plain
+      // text export is much smaller.
+      let format: "markdown" | "text" = "markdown";
+      let raw: string;
+      try {
+        raw = await exportText(g, id, "text/markdown");
+      } catch (err) {
+        if (!(err instanceof GoogleError && err.code === "too_large")) throw err;
+        raw = await exportText(g, id, "text/plain");
+        format = "text";
+      }
+      const { text, omitted } = format === "markdown" ? stripDataImages(raw) : { text: raw, omitted: 0 };
       const page = pageText(text, a.offset, a.maxChars);
-      const headings = page.offset === 0 ? headingsOf(text) : undefined;
-      const head = `"${f.name}" (modified ${f.modifiedTime ?? "?"}) ${f.webViewLink ?? docUrl(id)}`;
+      const headings = page.offset === 0 && format === "markdown" ? headingsOf(text) : undefined;
+      const fallback = format === "text" ? "\n[As plain text: the markdown export, which embeds the images, is over Google's 10 MB export limit. Headings, lists and links aren't marked.]" : "";
+      const head = `"${f.name}" (modified ${f.modifiedTime ?? "?"}) ${f.webViewLink ?? docUrl(id)}${fallback}`;
       const range = page.total > page.text.length ? `\n[Characters ${page.offset}–${page.offset + page.text.length} of ${page.total}.${page.nextOffset !== null ? ` More: call docs_read again with offset ${page.nextOffset}.` : " End of document."}]` : "";
       const outline = headings && page.nextOffset !== null && headings.length ? `\nHeadings: ${headings.map((h) => `${"#".repeat(h.level)} ${h.text}`).join(" | ").slice(0, 3000)}` : "";
       return {
@@ -79,6 +91,7 @@ export const docsTools = [
           offset: page.offset,
           nextOffset: page.nextOffset,
           totalChars: page.total,
+          format,
           ...(headings ? { headings } : {}),
           ...(omitted ? { imagesOmitted: omitted } : {}),
         },
@@ -102,7 +115,7 @@ export const docsTools = [
       const query = { fields: "id,name,mimeType,webViewLink", supportsAllDrives: true };
       let created: { id?: string; name?: string; mimeType?: string; webViewLink?: string };
       if (a.markdown.trim()) {
-        const { body, contentType } = multipart(metadata, a.markdown, "text/markdown; charset=UTF-8");
+        const { body, contentType } = multipart(metadata, a.markdown, "text/markdown");
         const res = await g.bytes("POST", `${DRIVE_UPLOAD}/files`, { query: { ...query, uploadType: "multipart" }, body, contentType });
         created = JSON.parse(res.data.toString("utf8"));
       } else {

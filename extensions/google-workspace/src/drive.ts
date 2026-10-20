@@ -131,8 +131,11 @@ const FORMATS: Record<string, Record<string, string>> = {
 const TEXT_FORMATS = new Set(["markdown", "text", "csv"]);
 export const exportFormats = (mimeType: string | undefined): string[] => Object.keys(FORMATS[mimeType ?? ""] ?? {});
 
-/** Binary exports at most this big are returned as base64 when asked (base64 grows it by a third; xaq drops binaries over 5 MB). */
-export const MAX_BASE64_BYTES = 3 * 1024 * 1024;
+/**
+ * Binary exports at most this big are attached when asked, as an MCP resource blob: base64 grows it by a third, to
+ * about 3.5 MB, which stays under the server's 4 MB result cap (mcp.ts) and xaq's 5 MB binary limit.
+ */
+export const MAX_BASE64_BYTES = 2.5 * 1024 * 1024;
 
 /** drive_upload's limit, decoded: its base64 (a third larger) plus the JSON-RPC envelope stays under xaq's 8 MB message cap. */
 export const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
@@ -282,7 +285,7 @@ export const driveTools = [
     name: "drive_export",
     title: "Export a Google Doc, Sheet or Slides file",
     description:
-      "Get a Google Doc, Sheet or Slides file's content in another format. Text formats come back as text, in pages: doc → markdown or text; sheet → csv (one CSV per tab, or pass tab); slides → text. Binary formats (pdf, docx, xlsx, pptx) come back as their size, plus the bytes as base64 only when includeBase64 is true and the file is at most 3 MB. To email a file, attach it from Drive by its id instead.",
+      "Get a Google Doc, Sheet or Slides file's content in another format. Text formats come back as text, in pages: doc → markdown or text; sheet → csv (one CSV per tab, or pass tab); slides → text. Binary formats (pdf, docx, xlsx, pptx) come back as their size, plus the file attached as an embedded resource (base64) only when includeBase64 is true and it is at most 2.5 MB. To email a file, attach it from Drive by its id instead.",
     risk: "read",
     target: "/fileId",
     input: {
@@ -291,7 +294,7 @@ export const driveTools = [
       tab: z.string().min(1).max(200).optional().describe("For csv: only this tab (by name). Default: every tab."),
       offset: z.number().int().min(0).default(0).describe("For text formats: the character to start at (nextOffset from the previous page)."),
       maxChars: z.number().int().min(1000).max(100_000).default(20_000).describe("For text formats: the most characters to return."),
-      includeBase64: z.boolean().default(false).describe("For binary formats: also return the file as base64 (at most 3 MB)."),
+      includeBase64: z.boolean().default(false).describe("For binary formats: also attach the file as an embedded resource, base64 (at most 2.5 MB)."),
     },
     async run(a, g) {
       const id = fileId(a.fileId);
@@ -325,15 +328,17 @@ export const driveTools = [
       }
       const res = await g.bytes("GET", `${DRIVE}/files/${encodeURIComponent(id)}/export`, { query: { mimeType: mime } });
       const size = res.data.length;
-      const fits = size <= MAX_BASE64_BYTES;
-      const note = a.includeBase64
-        ? fits
-          ? "The file is in structuredContent.base64."
-          : `It's over 3 MB, so it isn't returned here.`
-        : "Its bytes aren't returned (pass includeBase64: true for files up to 3 MB).";
+      const attach = a.includeBase64 && size <= MAX_BASE64_BYTES;
+      const uri = `gdrive-export:${id}.${a.format}`;
+      const note = attach
+        ? `The file is attached to this result as an embedded resource (${uri}, ${mime}, base64).`
+        : a.includeBase64
+          ? "It's over 2.5 MB, so it isn't attached."
+          : "Its bytes aren't returned (pass includeBase64: true to attach files up to 2.5 MB).";
       return {
         text: `Exported "${f.name}" as ${a.format}: ${sizeText(size)}. ${note} To send it by email, attach the Drive file by its id (${id}) rather than the export.`,
-        structured: { ...base, mimeType: mime, size, ...(a.includeBase64 && fits ? { base64: res.data.toString("base64") } : {}) },
+        structured: { ...base, mimeType: mime, size, attached: attach, ...(attach ? { resourceUri: uri } : {}) },
+        ...(attach ? { resources: [{ uri, mimeType: mime, blob: res.data.toString("base64") }] } : {}),
       };
     },
   }),

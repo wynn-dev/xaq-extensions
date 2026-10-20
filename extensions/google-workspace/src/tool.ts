@@ -10,7 +10,13 @@ export type Risk = "read" | "write" | "risky";
 
 export interface ToolOutput {
   text: string;
+  /**
+   * The same result as JSON (structuredContent). Kept under 1,000,000 characters of JSON: xaq drops a larger one,
+   * and the server drops it first (saying so in the text) when a result is too big.
+   */
   structured?: Record<string, unknown>;
+  /** Binary content, returned as MCP `resource` blocks (xaq passes blobs up to 5 MB decoded). Optional; added after the first version. */
+  resources?: { uri: string; mimeType: string; blob: string }[];
 }
 
 export interface ExtTool<S extends z.ZodRawShape = z.ZodRawShape> {

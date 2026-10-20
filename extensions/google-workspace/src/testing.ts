@@ -7,4 +7,4 @@ export { multipart } from "./util.ts";
 export { fileId, pageText, qString, rfc3339, toCsv } from "./util.ts";
 export { parseExpiry } from "./host.ts";
 export { allTools } from "./registry.ts";
-export { toolResult } from "./mcp.ts";
+export { MAX_RESULT_BYTES, MAX_STRUCTURED_CHARS, shapeResult, toolResult } from "./mcp.ts";

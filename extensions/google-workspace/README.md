@@ -18,11 +18,11 @@ Errors come back as `isError` results in plain words.
 | `drive_search` | read | `name?`, `text?` (full text; `"…"` for a phrase), `type?` doc\|sheet\|slides\|pdf\|folder\|any, `folderId?`, `modifiedAfter?`, `modifiedBefore?` (date or date-time), `ownedByMe?`, `includeSharedDrives?`, `pageSize?` 1–100 (25), `pageToken?` | `files[]`: id, name, type, mimeType, modifiedTime, owner, webViewLink, size?, shortcutTo?; `nextPageToken` |
 | `drive_list_folder` | read | `folderId?` (default `root`), `type?`, `pageSize?`, `pageToken?` | as above, folders first, then by name |
 | `drive_get` | read | `fileId` | details: owner, last modified by, created, size, parents, shared, trashed, canEdit, canComment, `exportFormats` |
-| `drive_export` | read | `fileId`, `format` markdown\|text\|csv\|pdf\|docx\|xlsx\|pptx, `tab?`, `offset?`, `maxChars?` (20,000), `includeBase64?` | text formats: the text, paged (`nextOffset`, `totalChars`); binary: `size`, and `base64` if asked and ≤ 3 MB |
+| `drive_export` | read | `fileId`, `format` markdown\|text\|csv\|pdf\|docx\|xlsx\|pptx, `tab?`, `offset?`, `maxChars?` (20,000), `includeBase64?` | text formats: the text, paged (`nextOffset`, `totalChars`); binary: `size`, plus the file as an MCP `resource` blob (base64) if asked and ≤ 2.5 MB |
 | `drive_create_folder` | write | `name`, `parentId?` | `folderId`, name, webViewLink, parents |
 | `drive_upload` | write | `name`, `folderId?`, `mimeType?` (guessed from the name), `content_base64` (≤ 5 MB decoded) | `fileId`, name, mimeType, size, webViewLink, parents |
 | `drive_trash` | **risky** | `fileId` | moves to the Trash (never a permanent delete); `fileId`, name, type, `trashed: true` |
-| `docs_read` | read | `documentId`, `offset?`, `maxChars?` (20,000) | the Doc as markdown, paged; first page lists `headings` |
+| `docs_read` | read | `documentId`, `offset?`, `maxChars?` (20,000) | the Doc as markdown, paged; first page lists `headings`. Plain text instead (`format: "text"`, with a note) when the markdown export is over Drive's 10 MB limit |
 | `docs_create` | write | `title`, `markdown?`, `folderId?` | `documentId`, name, webViewLink |
 | `docs_append` | write | `documentId`, `markdown` | paragraphs and tables added |
 | `docs_insert` | write | `documentId`, `markdown`, `position` start\|end\|before_heading\|after_heading\|end_of_section, `heading?` | as above |
@@ -79,7 +79,11 @@ same way. On other files they answer in plain words. Editing a Doc's content wor
 
 - Text pages are 1,000–100,000 characters (20,000 by default). Drive exports at most 10 MB, and the extension
   refuses any answer over 12 MB.
-- Binary exports come back as base64 only on request and only up to 3 MB. Files can't be saved for the agent:
+- Every result is held under 4 MB of JSON, half of xaq's 8 MB message limit (a larger message gets the child killed).
+  Over that, the structured copy goes first, then any attached file, then the text is cut with a note on how to ask
+  for less. A structured copy over 1,000,000 characters is always left out, as xaq would drop it, with a note.
+- Binary exports are attached as an MCP `resource` blob only on request and only up to 2.5 MB (3.5 MB as base64).
+  Files can't be saved for the agent:
   the sandbox can write only to the extension's own state directory, which the agent can't reach. To send a file by
   email, attach it from Drive by its id. Uploads are at most 5 MB decoded, to stay within xaq's 8 MB message limit.
 - A sheet's CSV goes through the Sheets API, one CSV per tab: Drive's CSV export has only the first tab.
@@ -116,7 +120,7 @@ From the repo root: `npm ci --ignore-scripts`, then:
 - `npm run typecheck:google-workspace`;
 - `npm run test:google-workspace`.
 
-`.github/workflows/google-workspace.yml` runs these on Node 22.13.0 and 24.
+`.github/workflows/google-workspace.yml` runs these on Node 22.13.0, 22.23 (the code-extension floor) and 24.
 
 The tests run the built `dist/server.mjs` exactly as xaq spawns it: `node --permission --no-experimental-sqlite`,
 one `--allow-fs-read`/`--allow-fs-write` flag per path, and the minimal environment. The harness answers
@@ -131,11 +135,11 @@ origin; xaq never sets it.
 | File | What |
 | --- | --- |
 | `test/extension.test.mjs` | The spawn argv and environment. The token reaches nothing: not stdout, stderr, `xaq/log`, files or tool output. Nothing is written. Token rotation after a 401, reconnect, no events, exit on SIGTERM and on stdin close. |
-| `test/drive.test.mjs` | Each Drive tool: the `q` it builds (escaping, filters, no `orderBy` with full text), paging, export by type (CSV per tab, base64 cap, 10 MB limit), folders, upload bytes, trash. |
-| `test/docs.test.mjs` | Each Docs tool: markdown read and paging, create by upload, append, insert at every position (checked on the document model), replace counts, overwrite in one batch, revision conflicts, comments and replies, ids as links. |
+| `test/drive.test.mjs` | Each Drive tool: the `q` it builds (escaping, filters, no `orderBy` with full text), paging, export by type (CSV per tab, resource blobs and their cap, 10 MB limit), folders, upload bytes, trash. |
+| `test/docs.test.mjs` | Each Docs tool: markdown read and paging, the plain-text fallback, a result over 4 MB cut safely, create by upload, append, insert at every position (checked on the document model), replace counts, overwrite in one batch, revision conflicts, comments and replies, ids as links. |
 | `test/errors.test.mjs` | Disabled APIs (both error shapes), scope, view-only, 404, 429 short and long, rate-limit 403s, 5xx retry for GET only, timeouts, the size cap, Google's 400 messages. |
 | `test/manifest.test.mjs` | The manifest against the contract, and `risk.tools` equal to what the server declares. |
-| `test/unit.test.mjs` | In-process (needs esbuild; skipped in the repo's generic CI): the markdown parser, the Docs request builder, error mapping, the client's retry, timeout and URL rules with an injected clock, ids and paging, and the risk map against the registry. |
+| `test/unit.test.mjs` | In-process (needs esbuild; skipped in the repo's generic CI): the result size cap, the markdown parser, the Docs request builder, error mapping, the client's retry, timeout and URL rules with an injected clock, ids and paging, and the risk map against the registry. |
 
 ## Live smoke test
 

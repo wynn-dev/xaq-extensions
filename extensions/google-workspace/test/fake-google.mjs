@@ -22,6 +22,9 @@ const DOC = "application/vnd.google-apps.document";
 const SHEET = "application/vnd.google-apps.spreadsheet";
 const SLIDES = "application/vnd.google-apps.presentation";
 const FOLDER = "application/vnd.google-apps.folder";
+/** My Drive's root folder id, as Drive reports it in `parents` (the alias "root" is accepted in requests, never returned). */
+export const ROOT_ID = "0AFaKeRoOtFoLdEr00Uk9PVA";
+const resolveRoot = (id) => (id === "root" ? ROOT_ID : id);
 const EXPORTS = {
   [DOC]: ["text/markdown", "text/plain", "application/pdf", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "text/html", "application/rtf", "application/vnd.oasis.opendocument.text", "application/epub+zip", "application/zip"],
   [SHEET]: ["text/csv", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "application/pdf", "text/tab-separated-values", "application/vnd.oasis.opendocument.spreadsheet", "application/zip"],
@@ -91,7 +94,7 @@ function term(t, fake) {
     return (f) => `${f.name} ${f.description ?? ""} ${f._text ?? ""} ${fake.docText(f.id)}`.toLowerCase().includes(words);
   }
   if ((m = new RegExp(`^mimeType = ${STR}$`).exec(t))) return (f) => f.mimeType === unq(m[1]);
-  if ((m = new RegExp(`^${STR} in parents$`).exec(t))) return (f) => (f.parents ?? []).includes(unq(m[1]));
+  if ((m = new RegExp(`^${STR} in parents$`).exec(t))) return (f) => (f.parents ?? []).includes(resolveRoot(unq(m[1])));
   if (t === "'me' in owners") return (f) => (f.owners ?? []).some((o) => o.me);
   if ((m = new RegExp(`^modifiedTime (<=|<|>=|>) ${STR}$`).exec(t))) {
     const at = Date.parse(unq(m[2]));
@@ -158,7 +161,7 @@ export async function startFakeGoogle(fixture) {
     holdMs: 3_000,
     /** Bytes for binary exports, by file id (default 2 KB). */
     exportSizes: new Map(),
-    /** Files whose export is over Drive's 10 MB limit. */
+    /** Files whose export is over Drive's 10 MB limit: a file id (every format) or "<id> <mimeType>". */
     tooLargeToExport: new Set(),
     user: fixture.user,
   };
@@ -217,7 +220,7 @@ export async function startFakeGoogle(fixture) {
     if (!mime) return json(res, 400, errors.drive(400, "required", "Required parameter: mimeType", { location: "mimeType", locationType: "parameter" }));
     if (!EXPORTS[f.mimeType]) return json(res, 403, errors.drive(403, "fileNotExportable", "Export only supports Docs Editors files."));
     if (!EXPORTS[f.mimeType].includes(mime)) return json(res, 400, errors.drive(400, "badRequest", "The requested conversion is not supported.", { location: "convertTo", locationType: "parameter" }));
-    if (state.tooLargeToExport.has(f.id)) return json(res, 403, errors.drive(403, "exportSizeLimitExceeded", "This file is too large to be exported."));
+    if (state.tooLargeToExport.has(f.id) || state.tooLargeToExport.has(`${f.id} ${mime}`)) return json(res, 403, errors.drive(403, "exportSizeLimitExceeded", "This file is too large to be exported."));
     const doc = docs.get(f.id);
     if (mime === "text/markdown") return send(res, 200, doc ? (doc.exportMarkdown ?? doc.markdown()) : "", { "content-type": "text/markdown; charset=utf-8" });
     if (mime === "text/plain") return send(res, 200, f.mimeType === SLIDES ? (slidesText.get(f.id) ?? "") : doc ? doc.plainText() : "", { "content-type": "text/plain; charset=utf-8" });
@@ -242,14 +245,15 @@ export async function startFakeGoogle(fixture) {
     } else if (meta.mimeType === DOC) {
       docs.set(id, Object.assign(new FakeDoc(id, meta.name ?? "Untitled document", []), { exportMarkdown: null }));
     } else if (media) mimeType = meta.mimeType ?? media.type.split(";")[0];
-    for (const p of meta.parents ?? []) if (p !== "root" && !files.has(p)) return notFoundFile(res, p);
+    const parents = (meta.parents ?? ["root"]).map(resolveRoot);
+    for (const p of parents) if (p !== ROOT_ID && !files.has(p)) return notFoundFile(res, p);
     const now = new Date().toISOString();
     const f = {
       kind: "drive#file",
       id,
       name: meta.name ?? "Untitled",
       mimeType,
-      parents: meta.parents ?? ["root"],
+      parents,
       createdTime: now,
       modifiedTime: now,
       owners: [{ kind: "drive#user", displayName: state.user.displayName, emailAddress: state.user.emailAddress, me: true }],

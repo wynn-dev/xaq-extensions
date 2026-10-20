@@ -37,7 +37,7 @@
     {
       "id": "about",
       "title": "What your agents can do",
-      "body": "Agents can search your Google Drive and read any Doc, Sheet or Slides file this Google account can open. They can create new files and edit Docs, Sheets and Slides you can edit (adding, inserting and replacing text are allowed by default). Anything that removes content asks you first: clearing cells, deleting tabs or slides, overwriting a whole document, and moving files to the Trash (only files the extension created, and never a permanent delete). Nothing here changes who files are shared with."
+      "body": "Agents can search your Google Drive and read any Doc, Sheet or Slides file this Google account can open. They can create new files and edit Docs, Sheets and Slides you can edit. These ask you first: moving a file to the Trash (only files the extension created; never a permanent delete), overwriting a whole document, clearing cells, and deleting a tab or a slide. Other edits go through without asking, including ones that remove text, such as replacing text with nothing or writing empty cells; Google's version history (File → Version history) can restore an earlier version. Nothing here changes who files are shared with."
     },
     {
       "id": "scopes",

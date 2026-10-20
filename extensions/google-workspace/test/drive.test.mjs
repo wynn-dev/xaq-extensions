@@ -162,21 +162,40 @@ describe("drive tools", () => {
     assert.match(missing.text, /No tab named "Nope". Tabs: "Summary", "Q3 Detail"/);
   });
 
-  it("drive_export: slides as text; binary formats as size, base64 only on request and under 3 MB", async () => {
+  it("drive_export: slides as text; binary formats as size, attached as a resource blob only on request and up to 2.5 MB", async () => {
     const text = await s.call("drive_export", { fileId: IDS.deck, format: "text" });
     assert.match(text.text, /^Product Review\nOctober 2026/);
     const pdf = await s.call("drive_export", { fileId: IDS.deck, format: "pdf" });
     assert.equal(pdf.structured.size, 2048);
-    assert.equal(pdf.structured.base64, undefined);
-    assert.match(pdf.text, /2\.0 KB\. Its bytes aren't returned \(pass includeBase64: true/);
+    assert.equal(pdf.structured.attached, false);
+    assert.equal(pdf.raw.content.length, 1, "no resource block");
+    assert.match(pdf.text, /2\.0 KB\. Its bytes aren't returned \(pass includeBase64: true to attach files up to 2\.5 MB\)/);
     assert.match(pdf.text, /attach the Drive file by its id/);
     const withBytes = await s.call("drive_export", { fileId: IDS.budget, format: "xlsx", includeBase64: true });
-    assert.equal(last().query.get("mimeType"), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-    assert.equal(Buffer.from(withBytes.structured.base64, "base64").subarray(0, 4).toString("latin1"), "PK\u0003\u0004");
-    s.fake.state.exportSizes.set(IDS.deck, 3 * 1024 * 1024 + 1);
+    const xlsx = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+    assert.equal(last().query.get("mimeType"), xlsx);
+    const block = withBytes.raw.content[1];
+    assert.deepEqual(Object.keys(block.resource).sort(), ["blob", "mimeType", "uri"]);
+    assert.equal(block.type, "resource");
+    assert.equal(block.resource.mimeType, xlsx);
+    assert.equal(block.resource.uri, `gdrive-export:${IDS.budget}.xlsx`);
+    assert.equal(Buffer.from(block.resource.blob, "base64").subarray(0, 4).toString("latin1"), "PK\u0003\u0004");
+    assert.equal(withBytes.structured.base64, undefined, "never in structuredContent (xaq drops it over 1,000,000 characters)");
+    assert.deepEqual([withBytes.structured.attached, withBytes.structured.resourceUri], [true, `gdrive-export:${IDS.budget}.xlsx`]);
+    assert.match(withBytes.text, /attached to this result as an embedded resource/);
+    // At the cap: attached, and the whole message stays under the 4 MB result cap.
+    s.fake.state.exportSizes.set(IDS.deck, 2.5 * 1024 * 1024);
+    const atCap = await s.call("drive_export", { fileId: IDS.deck, format: "pdf", includeBase64: true });
+    assert.equal(atCap.raw.content[1].type, "resource");
+    assert.equal(Buffer.from(atCap.raw.content[1].resource.blob, "base64").length, 2.5 * 1024 * 1024);
+    assert.ok(Buffer.byteLength(JSON.stringify(atCap.raw)) < 4_000_000);
+    s.fake.state.exportSizes.set(IDS.deck, 2.5 * 1024 * 1024 + 1);
     const big = await s.call("drive_export", { fileId: IDS.deck, format: "pptx", includeBase64: true });
-    assert.equal(big.structured.base64, undefined);
-    assert.match(big.text, /over 3 MB/);
+    assert.equal(big.raw.content.length, 1);
+    assert.equal(big.structured.attached, false);
+    assert.match(big.text, /It's over 2\.5 MB, so it isn't attached\./);
+    assert.doesNotMatch(big.text, /is attached/);
+    s.fake.state.exportSizes.delete(IDS.deck);
   });
 
   it("drive_create_folder makes a folder (in a parent when given) that the create tools can fill", async () => {
