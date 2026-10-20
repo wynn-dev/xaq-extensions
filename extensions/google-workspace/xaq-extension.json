@@ -1,0 +1,67 @@
+{
+  "schema": 1,
+  "name": "google-workspace",
+  "displayName": "Google Workspace",
+  "version": "1.0.0",
+  "description": "Google Docs, Sheets and Slides for your agents, plus Drive to find files: search and read anything in the account, write documents as markdown, create files, and comment.",
+  "kind": "code",
+  "slug": "workspace",
+  "code": {
+    "entry": "dist/server.mjs",
+    "node": ">=22.23.2",
+    "auth": {
+      "type": "google",
+      "scopes": [
+        "https://www.googleapis.com/auth/documents",
+        "https://www.googleapis.com/auth/spreadsheets",
+        "https://www.googleapis.com/auth/presentations",
+        "https://www.googleapis.com/auth/drive.file",
+        "https://www.googleapis.com/auth/drive.readonly"
+      ],
+      "apis": [
+        { "service": "docs.googleapis.com", "label": "Google Docs API" },
+        { "service": "sheets.googleapis.com", "label": "Google Sheets API" },
+        { "service": "slides.googleapis.com", "label": "Google Slides API" },
+        { "service": "drive.googleapis.com", "label": "Google Drive API" }
+      ]
+    },
+    "network": [
+      "www.googleapis.com",
+      "docs.googleapis.com",
+      "sheets.googleapis.com",
+      "slides.googleapis.com"
+    ],
+    "events": []
+  },
+  "setup": [
+    {
+      "id": "about",
+      "title": "What your agents can do",
+      "body": "Agents can search your Google Drive and read any Doc, Sheet or Slides file this Google account can open. They can create new files and edit Docs, Sheets and Slides you can edit. These ask you first: moving a file to the Trash (only files the extension created; never a permanent delete), overwriting a whole document, clearing cells, and deleting a tab or a slide. Other edits go through without asking, including ones that remove text, such as replacing text with nothing or writing empty cells; Google's version history (File → Version history) can restore an earlier version. Nothing here changes who files are shared with."
+    },
+    {
+      "id": "scopes",
+      "title": "The permissions Google will ask for",
+      "body": "Docs, Sheets and Slides (edit): read and change those files' content. Drive, view only: search, list folders, read file details and comments, and export files. Drive, files this app creates: put new files in Drive and comment on them; the extension can't change or delete your other Drive files through Drive. Approve all of them: a missing one makes some tools say \"reconnect\"."
+    }
+  ],
+  "risk": {
+    "tools": {
+      "drive_search": { "class": "read" },
+      "drive_list_folder": { "class": "read", "target": "/folderId" },
+      "drive_get": { "class": "read", "target": "/fileId" },
+      "drive_export": { "class": "read", "target": "/fileId" },
+      "drive_create_folder": { "class": "write" },
+      "drive_upload": { "class": "write" },
+      "drive_trash": { "class": "risky", "target": "/fileId" },
+      "docs_read": { "class": "read", "target": "/documentId" },
+      "docs_create": { "class": "write" },
+      "docs_append": { "class": "write", "target": "/documentId" },
+      "docs_insert": { "class": "write", "target": "/documentId" },
+      "docs_replace_text": { "class": "write", "target": "/documentId" },
+      "docs_overwrite": { "class": "risky", "target": "/documentId" },
+      "docs_comments_list": { "class": "read", "target": "/documentId" },
+      "docs_comment_add": { "class": "write", "target": "/documentId" }
+    }
+  }
+}

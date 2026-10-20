@@ -56,6 +56,25 @@ describe("validate", () => {
     assert.ok(validate(schema, { ...remote("demo"), kind: "plugin" }).length > 0);
     assert.match(checkExtension(ext("other", remote("demo")), schema).join("\n"), /must be the directory's name/);
   });
+  it("accepts code.auth type google (scopes and APIs to enable), and refuses a malformed one", () => {
+    const code = (auth) => ({ ...remote("g"), kind: "code", remote: undefined, code: { entry: "dist/server.mjs", auth, network: ["www.googleapis.com"], events: [] } });
+    const strip = (m) => JSON.parse(JSON.stringify(m));
+    const good = { type: "google", scopes: ["https://www.googleapis.com/auth/documents", "https://www.googleapis.com/auth/drive.file"], apis: [{ service: "docs.googleapis.com", label: "Google Docs API" }] };
+    assert.deepEqual(validate(schema, strip(code(good))), []);
+    assert.deepEqual(validate(schema, strip(code({ type: "google", scopes: ["https://www.googleapis.com/auth/drive.readonly"] }))), [], "apis is optional");
+    for (const bad of [
+      { ...good, scopes: [] },
+      { ...good, scopes: ["drive"] },
+      { ...good, scopes: ["https://evil.example/auth/x"] },
+      { ...good, apis: [{ service: "docs.evil.example", label: "x" }] },
+      { ...good, apis: [{ service: "docs.googleapis.com", label: "{{publicUrl}}" }] },
+      { ...good, clientIdInput: "client_id" },
+      { type: "google" },
+    ]) {
+      assert.ok(validate(schema, strip(code(bad))).length > 0, JSON.stringify(bad));
+    }
+  });
+
   it("refuses export-ignore and export-subst in any .gitattributes", () => {
     const root = join(tmp, "attrs");
     mkdirSync(join(root, "extensions", "x"), { recursive: true });

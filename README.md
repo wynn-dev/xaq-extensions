@@ -30,6 +30,7 @@ integrity, so xaq doesn't offer it as an update. `.gitattributes` may not use `e
 
 | Name | Kind | What |
 | --- | --- | --- |
+| [google-workspace](extensions/google-workspace/) | code | Google Docs, Sheets and Slides, plus Drive to find, export and upload files. |
 | [whoop](extensions/whoop/) | code | WHOOP recovery, sleep, strain and workouts with the WHOOP dashboard's trends and insights, read live. |
 
 Code extensions are built and tested from the repo root (`npm ci --ignore-scripts && npm run build && npm test`);
