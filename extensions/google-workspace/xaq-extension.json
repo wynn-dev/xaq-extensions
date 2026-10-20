@@ -61,7 +61,23 @@
       "docs_replace_text": { "class": "write", "target": "/documentId" },
       "docs_overwrite": { "class": "risky", "target": "/documentId" },
       "docs_comments_list": { "class": "read", "target": "/documentId" },
-      "docs_comment_add": { "class": "write", "target": "/documentId" }
+      "docs_comment_add": { "class": "write", "target": "/documentId" },
+      "sheets_list_tabs": { "class": "read", "target": "/spreadsheetId" },
+      "sheets_read": { "class": "read", "target": "/spreadsheetId" },
+      "sheets_write": { "class": "write", "target": "/spreadsheetId" },
+      "sheets_append_rows": { "class": "write", "target": "/spreadsheetId" },
+      "sheets_create": { "class": "write" },
+      "sheets_add_tab": { "class": "write", "target": "/spreadsheetId" },
+      "sheets_format": { "class": "write", "target": "/spreadsheetId" },
+      "sheets_clear": { "class": "risky", "target": "/spreadsheetId" },
+      "sheets_delete_tab": { "class": "risky", "target": "/spreadsheetId" },
+      "slides_read": { "class": "read", "target": "/presentationId" },
+      "slides_create": { "class": "write" },
+      "slides_add_slide": { "class": "write", "target": "/presentationId" },
+      "slides_duplicate_slide": { "class": "write", "target": "/presentationId" },
+      "slides_delete_slide": { "class": "risky", "target": "/presentationId" },
+      "slides_replace_text": { "class": "write", "target": "/presentationId" },
+      "slides_insert_image": { "class": "write", "target": "/presentationId" }
     }
   }
 }

@@ -4619,10 +4619,10 @@ var require_core = __commonJS({
         return this;
       }
       // Add format
-      addFormat(name, format) {
-        if (typeof format == "string")
-          format = new RegExp(format);
-        this.formats[name] = format;
+      addFormat(name, format2) {
+        if (typeof format2 == "string")
+          format2 = new RegExp(format2);
+        this.formats[name] = format2;
         return this;
       }
       errorsText(errors = this.errors, { separator = ", ", dataVar = "data" } = {}) {
@@ -4740,9 +4740,9 @@ var require_core = __commonJS({
     }
     function addInitialFormats() {
       for (const name in this.opts.formats) {
-        const format = this.opts.formats[name];
-        if (format)
-          this.addFormat(name, format);
+        const format2 = this.opts.formats[name];
+        if (format2)
+          this.addFormat(name, format2);
       }
     }
     function addInitialKeywords(defs) {
@@ -6425,18 +6425,18 @@ var require_format = __commonJS({
           });
           const fDef = gen.const("fDef", (0, codegen_1._)`${fmts}[${schemaCode}]`);
           const fType = gen.let("fType");
-          const format = gen.let("format");
-          gen.if((0, codegen_1._)`typeof ${fDef} == "object" && !(${fDef} instanceof RegExp)`, () => gen.assign(fType, (0, codegen_1._)`${fDef}.type || "string"`).assign(format, (0, codegen_1._)`${fDef}.validate`), () => gen.assign(fType, (0, codegen_1._)`"string"`).assign(format, fDef));
+          const format2 = gen.let("format");
+          gen.if((0, codegen_1._)`typeof ${fDef} == "object" && !(${fDef} instanceof RegExp)`, () => gen.assign(fType, (0, codegen_1._)`${fDef}.type || "string"`).assign(format2, (0, codegen_1._)`${fDef}.validate`), () => gen.assign(fType, (0, codegen_1._)`"string"`).assign(format2, fDef));
           cxt.fail$data((0, codegen_1.or)(unknownFmt(), invalidFmt()));
           function unknownFmt() {
             if (opts.strictSchema === false)
               return codegen_1.nil;
-            return (0, codegen_1._)`${schemaCode} && !${format}`;
+            return (0, codegen_1._)`${schemaCode} && !${format2}`;
           }
           function invalidFmt() {
-            const callFormat = schemaEnv.$async ? (0, codegen_1._)`(${fDef}.async ? await ${format}(${data}) : ${format}(${data}))` : (0, codegen_1._)`${format}(${data})`;
-            const validData = (0, codegen_1._)`(typeof ${format} == "function" ? ${callFormat} : ${format}.test(${data}))`;
-            return (0, codegen_1._)`${format} && ${format} !== true && ${fType} === ${ruleType} && !${validData}`;
+            const callFormat = schemaEnv.$async ? (0, codegen_1._)`(${fDef}.async ? await ${format2}(${data}) : ${format2}(${data}))` : (0, codegen_1._)`${format2}(${data})`;
+            const validData = (0, codegen_1._)`(typeof ${format2} == "function" ? ${callFormat} : ${format2}.test(${data}))`;
+            return (0, codegen_1._)`${format2} && ${format2} !== true && ${fType} === ${ruleType} && !${validData}`;
           }
         }
         function validateFormat() {
@@ -6447,7 +6447,7 @@ var require_format = __commonJS({
           }
           if (formatDef === true)
             return;
-          const [fmtType, format, fmtRef] = getFormat(formatDef);
+          const [fmtType, format2, fmtRef] = getFormat(formatDef);
           if (fmtType === ruleType)
             cxt.pass(validCondition());
           function unknownFormat() {
@@ -6474,7 +6474,7 @@ var require_format = __commonJS({
                 throw new Error("async format in sync schema");
               return (0, codegen_1._)`await ${fmtRef}(${data})`;
             }
-            return typeof format == "function" ? (0, codegen_1._)`${fmtRef}(${data})` : (0, codegen_1._)`${fmtRef}.test(${data})`;
+            return typeof format2 == "function" ? (0, codegen_1._)`${fmtRef}(${data})` : (0, codegen_1._)`${fmtRef}.test(${data})`;
           }
         }
       }
@@ -6489,8 +6489,8 @@ var require_format2 = __commonJS({
     "use strict";
     Object.defineProperty(exports, "__esModule", { value: true });
     var format_1 = require_format();
-    var format = [format_1.default];
-    exports.default = format;
+    var format2 = [format_1.default];
+    exports.default = format2;
   }
 });
 
@@ -7132,17 +7132,17 @@ var require_limit = __commonJS({
           cxt.fail$data((0, codegen_1.or)((0, codegen_1._)`typeof ${fmt} != "object"`, (0, codegen_1._)`${fmt} instanceof RegExp`, (0, codegen_1._)`typeof ${fmt}.compare != "function"`, compareCode(fmt)));
         }
         function validateFormat() {
-          const format = fCxt.schema;
-          const fmtDef = self.formats[format];
+          const format2 = fCxt.schema;
+          const fmtDef = self.formats[format2];
           if (!fmtDef || fmtDef === true)
             return;
           if (typeof fmtDef != "object" || fmtDef instanceof RegExp || typeof fmtDef.compare != "function") {
-            throw new Error(`"${keyword}": format "${format}" does not define "compare" function`);
+            throw new Error(`"${keyword}": format "${format2}" does not define "compare" function`);
           }
           const fmt = gen.scopeValue("formats", {
-            key: format,
+            key: format2,
             ref: fmtDef,
-            code: opts.code.formats ? (0, codegen_1._)`${opts.code.formats}${(0, codegen_1.getProperty)(format)}` : void 0
+            code: opts.code.formats ? (0, codegen_1._)`${opts.code.formats}${(0, codegen_1.getProperty)(format2)}` : void 0
           });
           cxt.fail$data(compareCode(fmt));
         }
@@ -11131,7 +11131,7 @@ function handleIntersectionResults(result, left, right) {
   const unrecKeys = /* @__PURE__ */ new Map();
   let unrecIssue;
   const keyIssues = /* @__PURE__ */ new Map();
-  const collect = (iss, side) => {
+  const collect2 = (iss, side) => {
     let keys;
     if (iss.code === "unrecognized_keys" && !iss.path?.length) {
       unrecIssue ?? (unrecIssue = iss);
@@ -11152,11 +11152,11 @@ function handleIntersectionResults(result, left, right) {
     return true;
   };
   for (const iss of left.issues) {
-    if (!collect(iss, "l"))
+    if (!collect2(iss, "l"))
       result.issues.push(iss);
   }
   for (const iss of right.issues) {
-    if (!collect(iss, "r"))
+    if (!collect2(iss, "r"))
       result.issues.push(iss);
   }
   const bothKeys = [...unrecKeys].filter(([, f]) => f.l && f.r).map(([k]) => k);
@@ -17626,8 +17626,8 @@ var error43 = () => {
       case "not_multiple_of":
         return `Número inválido: deve ser múltiplo de ${issue2.divisor}`;
       case "unrecognized_keys": {
-        const plural = issue2.keys.length > 1 ? "s" : "";
-        return `Chave${plural} inválida${plural}: ${joinValues(issue2.keys, ", ")}`;
+        const plural3 = issue2.keys.length > 1 ? "s" : "";
+        return `Chave${plural3} inválida${plural3}: ${joinValues(issue2.keys, ", ")}`;
       }
       case "invalid_key":
         return `Entrada inválida n${translateOriginWithArticle(issue2.origin, "definite")}`;
@@ -17769,8 +17769,8 @@ var error44 = () => {
       case "not_multiple_of":
         return `Número inválido: deve ser múltiplo de ${issue2.divisor}`;
       case "unrecognized_keys": {
-        const plural = issue2.keys.length > 1 ? "s" : "";
-        return `Chave${plural} inválida${plural}: ${joinValues(issue2.keys, ", ")}`;
+        const plural3 = issue2.keys.length > 1 ? "s" : "";
+        return `Chave${plural3} inválida${plural3}: ${joinValues(issue2.keys, ", ")}`;
       }
       case "invalid_key":
         return `Entrada inválida n${translateOriginWithArticle(issue2.origin, "definite")}`;
@@ -20008,8 +20008,8 @@ function generateMultipleOfCheck(doc, ctx, def, accessor) {
   }
 }
 function generateNumberFormatCheck(doc, def, accessor) {
-  const format = def.format;
-  switch (format) {
+  const format2 = def.format;
+  switch (format2) {
     case "safeint":
       doc.write(`if (!Number.isSafeInteger(${accessor})) return INVALID;`);
       break;
@@ -20026,16 +20026,16 @@ function generateNumberFormatCheck(doc, def, accessor) {
       doc.write(`if (!Number.isFinite(${accessor})) return INVALID;`);
       break;
     default: {
-      void format;
-      throw new ZodCompileUnsupportedError(`number format ${format}`);
+      void format2;
+      throw new ZodCompileUnsupportedError(`number format ${format2}`);
     }
   }
 }
 function generateBigIntFormatCheck(doc, def, accessor) {
-  const format = def.format;
-  if (!format)
+  const format2 = def.format;
+  if (!format2)
     return;
-  switch (format) {
+  switch (format2) {
     case "int64":
       doc.write(`if (${accessor} < -9223372036854775808n || ${accessor} > 9223372036854775807n) return INVALID;`);
       break;
@@ -20043,8 +20043,8 @@ function generateBigIntFormatCheck(doc, def, accessor) {
       doc.write(`if (${accessor} < 0n || ${accessor} > 18446744073709551615n) return INVALID;`);
       break;
     default: {
-      void format;
-      throw new ZodCompileUnsupportedError(`bigint format ${format}`);
+      void format2;
+      throw new ZodCompileUnsupportedError(`bigint format ${format2}`);
     }
   }
 }
@@ -20205,8 +20205,8 @@ function generateStringFormatCheck(doc, ctx, def, accessor) {
     doc.write(`if (!${patternConst}.test(${accessor})) return INVALID;`);
     return accessor;
   }
-  const format = def.format;
-  switch (format) {
+  const format2 = def.format;
+  switch (format2) {
     case "regex":
       throw new ZodCompileUnsupportedError("regex format without a pattern");
     case "lowercase":
@@ -20229,8 +20229,8 @@ function generateStringFormatCheck(doc, ctx, def, accessor) {
       break;
     }
     default: {
-      void format;
-      throw new ZodCompileUnsupportedError(`string format ${format}`);
+      void format2;
+      throw new ZodCompileUnsupportedError(`string format ${format2}`);
     }
   }
   return accessor;
@@ -22289,12 +22289,12 @@ function _stringbool(Classes, _params) {
   return codec2;
 }
 // @__NO_SIDE_EFFECTS__
-function _stringFormat(Class2, format, fnOrRegex, _params = {}) {
+function _stringFormat(Class2, format2, fnOrRegex, _params = {}) {
   const params = normalizeParams(_params);
   const def = {
     check: "string_format",
     type: "string",
-    format,
+    format: format2,
     fn: typeof fnOrRegex === "function" ? fnOrRegex : (val) => fnOrRegex.test(val),
     ...params
   };
@@ -22848,16 +22848,16 @@ var formatMap = {
 var stringProcessor = (schema, ctx, _json, _params) => {
   const json2 = _json;
   json2.type = "string";
-  const { minimum, maximum, format, patterns, contentEncoding, laxFormat } = schema._zod.bag;
+  const { minimum, maximum, format: format2, patterns, contentEncoding, laxFormat } = schema._zod.bag;
   if (typeof minimum === "number")
     json2.minLength = minimum;
   if (typeof maximum === "number")
     json2.maxLength = maximum;
-  if (format) {
-    json2.format = formatMap[format] ?? format;
+  if (format2) {
+    json2.format = formatMap[format2] ?? format2;
     if (json2.format === "")
       delete json2.format;
-    if (format === "time" || laxFormat) {
+    if (format2 === "time" || laxFormat) {
       delete json2.format;
     }
   }
@@ -22879,8 +22879,8 @@ var stringProcessor = (schema, ctx, _json, _params) => {
 };
 var numberProcessor = (schema, ctx, _json, params) => {
   const json2 = _json;
-  const { minimum, maximum, format, multipleOf, exclusiveMaximum, exclusiveMinimum } = schema._zod.bag;
-  if (typeof format === "string" && format.includes("int"))
+  const { minimum, maximum, format: format2, multipleOf, exclusiveMaximum, exclusiveMinimum } = schema._zod.bag;
+  if (typeof format2 === "string" && format2.includes("int"))
     json2.type = "integer";
   else
     json2.type = "number";
@@ -23237,7 +23237,7 @@ function stringifyKeyNames(bySchema, json2, visited) {
   const values = json2.enum ?? (json2.const !== void 0 ? [json2.const] : void 0);
   if (!numericType && !values?.some((v) => typeof v === "number"))
     return json2;
-  const { minimum, maximum, exclusiveMinimum, exclusiveMaximum, multipleOf, format, id, ...rest } = json2;
+  const { minimum, maximum, exclusiveMinimum, exclusiveMaximum, multipleOf, format: format2, id, ...rest } = json2;
   if (rest.enum)
     rest.enum = rest.enum.map((v) => typeof v === "number" ? String(v) : v);
   else if (typeof rest.const === "number")
@@ -24353,8 +24353,8 @@ var ZodCustomStringFormat = /* @__PURE__ */ $constructor("ZodCustomStringFormat"
   $ZodCustomStringFormat.init(inst, def);
   ZodStringFormat.init(inst, def);
 });
-function stringFormat(format, fnOrRegex, _params = {}) {
-  return _stringFormat(ZodCustomStringFormat, format, fnOrRegex, _params);
+function stringFormat(format2, fnOrRegex, _params = {}) {
+  return _stringFormat(ZodCustomStringFormat, format2, fnOrRegex, _params);
 }
 function hostname2(_params) {
   return _stringFormat(ZodCustomStringFormat, "hostname", regexes_exports.hostname, _params);
@@ -24363,12 +24363,12 @@ function hex2(_params) {
   return _stringFormat(ZodCustomStringFormat, "hex", regexes_exports.hex, _params);
 }
 function hash(alg, params) {
-  const enc = params?.enc ?? "hex";
-  const format = `${alg}_${enc}`;
-  const regex = regexes_exports[format];
+  const enc3 = params?.enc ?? "hex";
+  const format2 = `${alg}_${enc3}`;
+  const regex = regexes_exports[format2];
   if (!regex)
-    throw new Error(`Unrecognized hash format: ${format}`);
-  return _stringFormat(ZodCustomStringFormat, format, regex, params);
+    throw new Error(`Unrecognized hash format: ${format2}`);
+  return _stringFormat(ZodCustomStringFormat, format2, regex, params);
 }
 var ZodNumber = /* @__PURE__ */ $constructor("ZodNumber", (inst, def) => {
   $ZodNumber.init(inst, def);
@@ -25538,56 +25538,56 @@ function convertBaseSchema(schema, ctx) {
     case "string": {
       let stringSchema = z.string();
       if (schema.format) {
-        const format = schema.format;
-        if (format === "email") {
+        const format2 = schema.format;
+        if (format2 === "email") {
           stringSchema = stringSchema.check(z.email());
-        } else if (format === "uri" || format === "uri-reference") {
+        } else if (format2 === "uri" || format2 === "uri-reference") {
           stringSchema = stringSchema.check(z.url());
-        } else if (format === "uuid" || format === "guid") {
+        } else if (format2 === "uuid" || format2 === "guid") {
           stringSchema = stringSchema.check(z.uuid());
-        } else if (format === "date-time") {
+        } else if (format2 === "date-time") {
           stringSchema = stringSchema.check(z.iso.datetime({ offset: true }));
-        } else if (format === "date") {
+        } else if (format2 === "date") {
           stringSchema = stringSchema.check(z.iso.date());
-        } else if (format === "time") {
+        } else if (format2 === "time") {
           stringSchema = stringSchema.check(z.regex(fullTime));
-        } else if (format === "duration") {
+        } else if (format2 === "duration") {
           stringSchema = stringSchema.check(z.iso.duration());
-        } else if (format === "hostname") {
+        } else if (format2 === "hostname") {
           stringSchema = stringSchema.check(z.hostname());
-        } else if (format === "ipv4") {
+        } else if (format2 === "ipv4") {
           stringSchema = stringSchema.check(z.ipv4());
-        } else if (format === "ipv6") {
+        } else if (format2 === "ipv6") {
           stringSchema = stringSchema.check(z.ipv6());
-        } else if (format === "mac") {
+        } else if (format2 === "mac") {
           stringSchema = stringSchema.check(z.mac());
-        } else if (format === "cidr") {
+        } else if (format2 === "cidr") {
           stringSchema = stringSchema.check(z.cidrv4());
-        } else if (format === "cidr-v6") {
+        } else if (format2 === "cidr-v6") {
           stringSchema = stringSchema.check(z.cidrv6());
-        } else if (format === "base64") {
+        } else if (format2 === "base64") {
           stringSchema = stringSchema.check(z.base64());
-        } else if (format === "base64url") {
+        } else if (format2 === "base64url") {
           stringSchema = stringSchema.check(z.base64url());
-        } else if (format === "e164") {
+        } else if (format2 === "e164") {
           stringSchema = stringSchema.check(z.e164());
-        } else if (format === "credit_card") {
+        } else if (format2 === "credit_card") {
           stringSchema = stringSchema.check(z.creditCard());
-        } else if (format === "jwt") {
+        } else if (format2 === "jwt") {
           stringSchema = stringSchema.check(z.jwt());
-        } else if (format === "emoji") {
+        } else if (format2 === "emoji") {
           stringSchema = stringSchema.check(z.emoji());
-        } else if (format === "nanoid") {
+        } else if (format2 === "nanoid") {
           stringSchema = stringSchema.check(z.nanoid());
-        } else if (format === "cuid") {
+        } else if (format2 === "cuid") {
           stringSchema = stringSchema.check(z.cuid());
-        } else if (format === "cuid2") {
+        } else if (format2 === "cuid2") {
           stringSchema = stringSchema.check(z.cuid2());
-        } else if (format === "ulid") {
+        } else if (format2 === "ulid") {
           stringSchema = stringSchema.check(z.ulid());
-        } else if (format === "xid") {
+        } else if (format2 === "xid") {
           stringSchema = stringSchema.check(z.xid());
-        } else if (format === "ksuid") {
+        } else if (format2 === "ksuid") {
           stringSchema = stringSchema.check(z.ksuid());
         }
       }
@@ -27711,6 +27711,7 @@ var DRIVE = "https://www.googleapis.com/drive/v3";
 var DRIVE_UPLOAD = "https://www.googleapis.com/upload/drive/v3";
 var DOCS = "https://docs.googleapis.com/v1";
 var SHEETS = "https://sheets.googleapis.com/v4";
+var SLIDES = "https://slides.googleapis.com/v1";
 var APIS = {
   "docs.googleapis.com": "Google Docs API",
   "sheets.googleapis.com": "Google Sheets API",
@@ -37072,19 +37073,19 @@ var docsTools = [
     async run(a, g) {
       const id = fileId(a.documentId, "Doc id");
       const f = await requireDoc(g, id);
-      let format = "markdown";
+      let format2 = "markdown";
       let raw;
       try {
         raw = await exportText(g, id, "text/markdown");
       } catch (err) {
         if (!(err instanceof GoogleError && err.code === "too_large")) throw err;
         raw = await exportText(g, id, "text/plain");
-        format = "text";
+        format2 = "text";
       }
-      const { text, omitted } = format === "markdown" ? stripDataImages(raw) : { text: raw, omitted: 0 };
+      const { text, omitted } = format2 === "markdown" ? stripDataImages(raw) : { text: raw, omitted: 0 };
       const page = pageText(text, a.offset, a.maxChars);
-      const headings = page.offset === 0 && format === "markdown" ? headingsOf(text) : void 0;
-      const fallback = format === "text" ? "\n[As plain text: the markdown export, which embeds the images, is over Google's 10 MB export limit. Headings, lists and links aren't marked.]" : "";
+      const headings = page.offset === 0 && format2 === "markdown" ? headingsOf(text) : void 0;
+      const fallback = format2 === "text" ? "\n[As plain text: the markdown export, which embeds the images, is over Google's 10 MB export limit. Headings, lists and links aren't marked.]" : "";
       const head = `"${f.name}" (modified ${f.modifiedTime ?? "?"}) ${f.webViewLink ?? docUrl(id)}${fallback}`;
       const range2 = page.total > page.text.length ? `
 [Characters ${page.offset}–${page.offset + page.text.length} of ${page.total}.${page.nextOffset !== null ? ` More: call docs_read again with offset ${page.nextOffset}.` : " End of document."}]` : "";
@@ -37102,7 +37103,7 @@ ${page.text}`,
           offset: page.offset,
           nextOffset: page.nextOffset,
           totalChars: page.total,
-          format,
+          format: format2,
           ...headings ? { headings } : {},
           ...omitted ? { imagesOmitted: omitted } : {}
         }
@@ -37283,10 +37284,1050 @@ More comments: call docs_comments_list again with pageToken "${res.nextPageToken
 ];
 
 // extensions/google-workspace/src/sheets.ts
-var sheetsTools = [];
+import { randomInt } from "node:crypto";
+
+// extensions/google-workspace/src/folders.ts
+var folderIdInput = external_exports.string().min(1).max(500).optional().describe("A Drive folder to put the new file in: its id or link (default: My Drive). The account must be able to add files to it.");
+function folderIdOf(input2) {
+  if (input2 === void 0) return void 0;
+  const id = fileId(input2, "folder id", true);
+  return id === "root" ? void 0 : id;
+}
+async function moveIntoFolder(g, id, folderId) {
+  const res = await g.json("PATCH", `${DRIVE}/files/${encodeURIComponent(id)}`, {
+    query: { addParents: folderId, removeParents: "root", supportsAllDrives: true, fields: "id,parents" },
+    body: {}
+  });
+  return res.parents ?? [folderId];
+}
+function afterCreate(err, made, step) {
+  const msg = `${made}, but ${step}${err?.message ?? String(err)}`;
+  if (err instanceof GoogleError) return new GoogleError(err.code, msg, err.status);
+  return new InputError(msg);
+}
+
+// extensions/google-workspace/src/sheets.ts
+var SHEETS_BASE = `${SHEETS}/spreadsheets`;
+var MAX_COLUMN = 18278;
+var MAX_ROW = 1e7;
+var MAX_WRITE_CELLS = 5e4;
+var MAX_TABLE_CELL_CHARS = 200;
+function spreadsheetIdOf(input2) {
+  return fileId(input2, "spreadsheet id");
+}
+var enc = encodeURIComponent;
+function columnNumber(letters) {
+  let n = 0;
+  for (const ch of letters.toUpperCase()) n = n * 26 + (ch.charCodeAt(0) - 64);
+  return n;
+}
+function columnLetters(n) {
+  if (!Number.isInteger(n) || n < 1 || n > MAX_COLUMN) throw new InputError(`Column ${n} is out of range (1–${MAX_COLUMN}).`);
+  let s = "";
+  while (n > 0) {
+    const r = (n - 1) % 26;
+    s = String.fromCharCode(65 + r) + s;
+    n = Math.floor((n - 1) / 26);
+  }
+  return s;
+}
+var CELL = /^\$?([A-Za-z]{1,3})\$?(\d{1,9})$/;
+var COL = /^\$?([A-Za-z]{1,3})$/;
+var ROW = /^\$?(\d{1,9})$/;
+function col(letters) {
+  const n = columnNumber(letters);
+  if (n > MAX_COLUMN) throw new InputError(`Column ${letters.toUpperCase()} is past the last possible column (ZZZ).`);
+  return n;
+}
+function row(digits) {
+  const n = Number(digits);
+  if (n < 1 || n > MAX_ROW) throw new InputError(`Row ${digits} is out of range (rows start at 1).`);
+  return n;
+}
+function parseRef(ref) {
+  const parts = ref.split(":");
+  if (parts.length > 2) return null;
+  if (parts.length === 1) {
+    const c = CELL.exec(parts[0]);
+    if (!c) return null;
+    const cc = col(c[1]);
+    const rr = row(c[2]);
+    return { startCol: cc, startRow: rr, endCol: cc, endRow: rr };
+  }
+  const [a, b] = parts;
+  const ca = CELL.exec(a);
+  const cb = CELL.exec(b);
+  if (ca && cb) {
+    const [c1, c2] = [col(ca[1]), col(cb[1])].sort((x, y) => x - y);
+    const [r1, r2] = [row(ca[2]), row(cb[2])].sort((x, y) => x - y);
+    return { startCol: c1, startRow: r1, endCol: c2, endRow: r2 };
+  }
+  const colA = COL.exec(a);
+  const colB = COL.exec(b);
+  if (ca && colB) {
+    const [c1, c2] = [col(ca[1]), col(colB[1])].sort((x, y) => x - y);
+    return { startCol: c1, startRow: row(ca[2]), endCol: c2 };
+  }
+  if (colA && colB) {
+    const [c1, c2] = [col(colA[1]), col(colB[1])].sort((x, y) => x - y);
+    return { startCol: c1, endCol: c2 };
+  }
+  const rowA = ROW.exec(a);
+  const rowB = ROW.exec(b);
+  if (rowA && rowB) {
+    const [r1, r2] = [row(rowA[1]), row(rowB[1])].sort((x, y) => x - y);
+    return { startRow: r1, endRow: r2 };
+  }
+  return null;
+}
+function checkTabName(name) {
+  if (name.length < 1 || name.length > 100) throw new InputError("A tab name is 1 to 100 characters.");
+  if (/[\u0000-\u001f\u007f]/.test(name)) throw new InputError("A tab name can't contain control characters.");
+  return name;
+}
+function parseA1(input2) {
+  const s = input2.trim();
+  if (!s) throw new InputError("The range is empty. Give A1 notation such as 'Sheet 1'!A1:C10, or a tab name.");
+  if (s.length > 300) throw new InputError("The range is too long.");
+  if (s.startsWith("'")) {
+    let name = "";
+    let i = 1;
+    for (; i < s.length; i++) {
+      if (s[i] === "'") {
+        if (s[i + 1] === "'") {
+          name += "'";
+          i++;
+          continue;
+        }
+        break;
+      }
+      name += s[i];
+    }
+    if (i >= s.length) throw new InputError(`The quoted tab name in ${s} has no closing quote. Write a quote inside a name as two quotes ('').`);
+    const rest = s.slice(i + 1);
+    const sheet = checkTabName(name);
+    if (rest === "" || rest === "!") return { sheet };
+    if (!rest.startsWith("!")) throw new InputError(`Expected ! after the quoted tab name in ${s}.`);
+    const ref2 = parseRef(rest.slice(1));
+    if (!ref2) throw new InputError(`${rest.slice(1)} isn't an A1 range (such as A1, A1:C10, A:C, 2:5 or A2:C).`);
+    return { sheet, ...ref2 };
+  }
+  const bang = s.lastIndexOf("!");
+  if (bang >= 0) {
+    const sheet = checkTabName(s.slice(0, bang));
+    const tail = s.slice(bang + 1);
+    if (tail === "") return { sheet };
+    const ref2 = parseRef(tail);
+    if (!ref2) throw new InputError(`${tail} isn't an A1 range (such as A1, A1:C10, A:C, 2:5 or A2:C). Quote a tab name that contains ! ('My!Tab'!A1).`);
+    return { sheet, ...ref2 };
+  }
+  const ref = parseRef(s);
+  if (ref) return ref;
+  if (/^[$A-Za-z0-9]*:[$A-Za-z0-9:]*$/.test(s)) throw new InputError(`${s} isn't an A1 range (such as A1, A1:C10, A:C, 2:5 or A2:C).`);
+  return { sheet: checkTabName(s) };
+}
+function isSingleCell(r) {
+  return r.startCol !== void 0 && r.startCol === r.endCol && r.startRow !== void 0 && r.startRow === r.endRow;
+}
+function formatA1(r) {
+  const sheet = r.sheet === void 0 ? "" : `'${r.sheet.replace(/'/g, "''")}'`;
+  let ref = "";
+  if (r.startCol !== void 0) {
+    const c1 = columnLetters(r.startCol);
+    const c2 = columnLetters(r.endCol ?? r.startCol);
+    if (isSingleCell(r)) ref = `${c1}${r.startRow}`;
+    else if (r.startRow !== void 0 && r.endRow !== void 0) ref = `${c1}${r.startRow}:${c2}${r.endRow}`;
+    else if (r.startRow !== void 0) ref = `${c1}${r.startRow}:${c2}`;
+    else ref = `${c1}:${c2}`;
+  } else if (r.startRow !== void 0) {
+    ref = `${r.startRow}:${r.endRow ?? r.startRow}`;
+  }
+  if (!sheet && !ref) throw new InputError("The range names neither a tab nor cells.");
+  if (!ref) return sheet;
+  return sheet ? `${sheet}!${ref}` : ref;
+}
+function gridRange(r, sheetId) {
+  const g = { sheetId };
+  if (r.startRow !== void 0) g.startRowIndex = r.startRow - 1;
+  if (r.endRow !== void 0) g.endRowIndex = r.endRow;
+  if (r.startCol !== void 0) g.startColumnIndex = r.startCol - 1;
+  if (r.endCol !== void 0) g.endColumnIndex = r.endCol;
+  return g;
+}
+async function getMeta(g, id) {
+  const meta3 = await g.json("GET", `${SHEETS_BASE}/${enc(id)}`, {
+    query: { fields: "spreadsheetId,spreadsheetUrl,properties.title,sheets.properties" }
+  });
+  const tabs = (meta3.sheets ?? []).map((s) => s.properties).sort((a, b) => (a.index ?? 0) - (b.index ?? 0));
+  return { id, title: meta3.properties?.title ?? "", url: meta3.spreadsheetUrl ?? spreadsheetUrl(id), tabs };
+}
+function spreadsheetUrl(id) {
+  return `https://docs.google.com/spreadsheets/d/${enc(id)}/edit`;
+}
+function pickTab(tabs, name) {
+  if (tabs.length === 0) throw new InputError("The spreadsheet has no tabs.");
+  if (name === void 0) return tabs.find((t) => !t.hidden) ?? tabs[0];
+  const exact = tabs.find((t) => t.title === name);
+  if (exact) return exact;
+  const folded = tabs.filter((t) => t.title.toLowerCase() === name.toLowerCase());
+  if (folded.length === 1) return folded[0];
+  throw new InputError(`There's no tab named "${name}". The tabs are: ${tabs.map((t) => `"${t.title}"`).join(", ")}.`);
+}
+function cellText(v) {
+  if (v === null || v === void 0) return "";
+  let s = String(v).replace(/\r?\n/g, "<br>").replace(/\|/g, "\\|");
+  if (s.length > MAX_TABLE_CELL_CHARS) s = `${s.slice(0, MAX_TABLE_CELL_CHARS - 1)}…`;
+  return s;
+}
+function markdownTable(rows, startRow, startCol) {
+  const width = Math.max(1, ...rows.map((r) => r.length));
+  const letters = Array.from({ length: width }, (_, i) => columnLetters(startCol + i));
+  const lines = [`| | ${letters.join(" | ")} |`, `|---|${letters.map(() => "---").join("|")}|`];
+  rows.forEach((r, i) => {
+    const cells = Array.from({ length: width }, (_, j) => cellText(r[j]));
+    lines.push(`| ${startRow + i} | ${cells.join(" | ")} |`);
+  });
+  return lines.join("\n");
+}
+var spreadsheetIdInput = external_exports.string().min(1).max(500).describe("The spreadsheet's id (the part after /d/ in its URL) or its docs.google.com URL.");
+var rangeInput = external_exports.string().min(1).max(300).describe("A1 notation: 'Sheet 1'!A1:C10, Sheet1!A:C, Sheet1!2:5, Sheet1!A2:C (open-ended), or a tab name alone for the whole tab. Without a tab name, the first visible tab.");
+var cellValue = external_exports.union([external_exports.string().max(5e4), external_exports.number(), external_exports.boolean(), external_exports.null()]);
+var valuesInput = external_exports.array(external_exports.array(cellValue).max(MAX_COLUMN)).min(1).max(1e4).describe('Rows of cell values (strings, numbers, booleans). null leaves a cell unchanged; "" clears it.');
+var inputMode = external_exports.enum(["USER_ENTERED", "RAW"]).default("USER_ENTERED").describe(`USER_ENTERED (default) parses values as if typed into Sheets: =formulas, numbers, dates. RAW stores them as given, unparsed: strings stay text (an "=…" string isn't a formula), numbers and booleans stay numbers and booleans.`);
+var headerInput = external_exports.array(external_exports.string().max(1e3)).min(1).max(1e3);
+function checkValues(values) {
+  const cells = values.reduce((n, r) => n + r.length, 0);
+  if (cells > MAX_WRITE_CELLS) throw new InputError(`That's ${cells} cells; write at most ${MAX_WRITE_CELLS} per call.`);
+  return cells;
+}
+function headerRow(header) {
+  return { values: header.map((h) => ({ userEnteredValue: { stringValue: h }, userEnteredFormat: { textFormat: { bold: true } } })) };
+}
+function plural(n, word) {
+  return `${n} ${word}${n === 1 ? "" : "s"}`;
+}
+async function batchUpdate(g, id, requests) {
+  return g.json("POST", `${SHEETS_BASE}/${enc(id)}:batchUpdate`, { body: { requests } });
+}
+var listTabs = tool({
+  name: "sheets_list_tabs",
+  title: "List a spreadsheet's tabs",
+  description: "Lists a Google Sheets spreadsheet's tabs: title, tab id, position, row and column counts, frozen rows, hidden.",
+  input: { spreadsheetId: spreadsheetIdInput },
+  risk: "read",
+  target: "/spreadsheetId",
+  async run(args, g) {
+    const meta3 = await getMeta(g, spreadsheetIdOf(args.spreadsheetId));
+    const tabs = meta3.tabs.map((t) => ({
+      title: t.title,
+      tabId: t.sheetId,
+      position: (t.index ?? 0) + 1,
+      type: t.sheetType ?? "GRID",
+      rows: t.gridProperties?.rowCount ?? null,
+      columns: t.gridProperties?.columnCount ?? null,
+      frozenRows: t.gridProperties?.frozenRowCount ?? 0,
+      frozenColumns: t.gridProperties?.frozenColumnCount ?? 0,
+      hidden: t.hidden === true
+    }));
+    const lines = [`**${meta3.title || "(untitled)"}** (${plural(tabs.length, "tab")})`, meta3.url, ""];
+    for (const t of tabs) {
+      const extra = [t.hidden ? "hidden" : "", t.frozenRows ? `${plural(t.frozenRows, "frozen row")}` : "", t.type !== "GRID" ? t.type.toLowerCase() : ""].filter(Boolean);
+      const size = t.rows === null ? "no grid" : `${t.rows} rows × ${t.columns} columns`;
+      lines.push(`${t.position}. "${t.title}" (tab id ${t.tabId}): ${size}${extra.length ? `, ${extra.join(", ")}` : ""}`);
+    }
+    return { text: lines.join("\n"), structured: { spreadsheetId: meta3.id, title: meta3.title, url: meta3.url, tabs } };
+  }
+});
+var RENDER = { formatted: "FORMATTED_VALUE", unformatted: "UNFORMATTED_VALUE", formula: "FORMULA" };
+var read = tool({
+  name: "sheets_read",
+  title: "Read cells from a spreadsheet",
+  description: "Reads a range (A1 notation) or a whole tab of a Google Sheets spreadsheet, as a markdown table labelled with the sheet's column letters and row numbers, plus the rows as structured data. At most maxRows rows per call; when there are more, the result says which fromRow to call again with.",
+  input: {
+    spreadsheetId: spreadsheetIdInput,
+    range: rangeInput,
+    render: external_exports.enum(["formatted", "unformatted", "formula"]).default("formatted").describe("formatted (default): values as Sheets shows them. unformatted: raw numbers and booleans. formula: the formulas themselves (=SUM(A1:A3)) instead of their results."),
+    maxRows: external_exports.number().int().min(1).max(1e3).default(100).describe("Rows per call (1–1000, default 100)."),
+    fromRow: external_exports.number().int().min(1).max(MAX_ROW).optional().describe("The sheet row number to start at, for the next page of a big range.")
+  },
+  risk: "read",
+  target: "/spreadsheetId",
+  async run(args, g) {
+    const id = spreadsheetIdOf(args.spreadsheetId);
+    const a1 = parseA1(args.range);
+    const meta3 = await getMeta(g, id);
+    const tab = pickTab(meta3.tabs, a1.sheet);
+    if (tab.sheetType && tab.sheetType !== "GRID") throw new InputError(`"${tab.title}" is a ${tab.sheetType.toLowerCase()} tab, which has no cells.`);
+    const rowCount = tab.gridProperties?.rowCount ?? MAX_ROW;
+    const colCount = tab.gridProperties?.columnCount ?? MAX_COLUMN;
+    if (a1.startCol !== void 0 && a1.startCol > colCount) {
+      throw new InputError(`Column ${columnLetters(a1.startCol)} is past the last column of "${tab.title}" (${columnLetters(colCount)}).`);
+    }
+    const maxRows = args.maxRows;
+    const firstRow = Math.max(a1.startRow ?? 1, args.fromRow ?? 1);
+    const lastRow = Math.min(a1.endRow ?? rowCount, rowCount);
+    const startCol = a1.startCol ?? 1;
+    const base = { spreadsheetId: id, tab: tab.title, render: args.render, startRow: firstRow, startColumn: columnLetters(startCol) };
+    if (firstRow > lastRow) {
+      return { text: `No rows: "${tab.title}" has ${rowCount} rows and the range ends at row ${lastRow}.`, structured: { ...base, range: null, rows: [], hasMore: false } };
+    }
+    const toRow = Math.min(lastRow, firstRow + maxRows - 1);
+    const request = formatA1({
+      sheet: tab.title,
+      startCol: a1.startCol,
+      endCol: a1.endCol === void 0 ? void 0 : Math.min(a1.endCol, colCount),
+      startRow: firstRow,
+      endRow: toRow
+    });
+    const render = RENDER[args.render];
+    const res = await g.json("GET", `${SHEETS_BASE}/${enc(id)}/values/${enc(request)}`, {
+      query: { majorDimension: "ROWS", valueRenderOption: render, dateTimeRenderOption: render === "FORMATTED_VALUE" ? void 0 : "FORMATTED_STRING" }
+    });
+    const values = res.values ?? [];
+    const hasMore = toRow < lastRow;
+    const rows = values.slice(0, maxRows);
+    const structured = { ...base, range: res.range ?? request, rows, lastRow, hasMore };
+    if (hasMore) structured.nextFromRow = toRow + 1;
+    const more = `The range runs on to row ${lastRow}${rows.length < maxRows ? " (rows below may be empty)" : ""}: call again with fromRow ${toRow + 1}.`;
+    if (rows.length === 0) return { text: `${res.range ?? request} is empty.${hasMore ? ` ${more}` : ""}`, structured };
+    const parts = [`${res.range ?? request}: rows ${firstRow}–${firstRow + rows.length - 1}`, "", markdownTable(rows, firstRow, startCol)];
+    if (hasMore) parts.push("", more);
+    return { text: parts.join("\n"), structured };
+  }
+});
+var write = tool({
+  name: "sheets_write",
+  title: "Write cells in a spreadsheet",
+  description: "Writes a 2-D array of values into a range of a Google Sheets spreadsheet, overwriting what's there. A single cell (Sheet1!B2) or a tab name is where the values start; a bigger range must fit them. Returns the range actually updated.",
+  input: { spreadsheetId: spreadsheetIdInput, range: rangeInput, values: valuesInput, input: inputMode },
+  risk: "write",
+  target: "/spreadsheetId",
+  async run(args, g) {
+    const id = spreadsheetIdOf(args.spreadsheetId);
+    const a1 = parseA1(args.range);
+    checkValues(args.values);
+    if (!isSingleCell(a1)) {
+      const width = Math.max(...args.values.map((r) => r.length));
+      if (a1.startRow !== void 0 && a1.endRow !== void 0 && args.values.length > a1.endRow - a1.startRow + 1) {
+        throw new InputError(`${plural(args.values.length, "row")} of values don't fit in ${formatA1(a1)} (${plural(a1.endRow - a1.startRow + 1, "row")}). Give a bigger range, or just its top-left cell.`);
+      }
+      if (a1.startCol !== void 0 && a1.endCol !== void 0 && width > a1.endCol - a1.startCol + 1) {
+        throw new InputError(`${plural(width, "column")} of values don't fit in ${formatA1(a1)} (${plural(a1.endCol - a1.startCol + 1, "column")}). Give a bigger range, or just its top-left cell.`);
+      }
+    }
+    const range2 = formatA1(a1);
+    const res = await g.json("PUT", `${SHEETS_BASE}/${enc(id)}/values/${enc(range2)}`, {
+      query: { valueInputOption: args.input },
+      body: { range: range2, majorDimension: "ROWS", values: args.values }
+    });
+    const cells = res.updatedCells ?? 0;
+    return {
+      text: `Updated ${res.updatedRange ?? range2}: ${plural(cells, "cell")} in ${plural(res.updatedRows ?? 0, "row")} (${args.input}).`,
+      structured: { spreadsheetId: id, updatedRange: res.updatedRange ?? null, updatedRows: res.updatedRows ?? 0, updatedColumns: res.updatedColumns ?? 0, updatedCells: cells }
+    };
+  }
+});
+var appendRows = tool({
+  name: "sheets_append_rows",
+  title: "Append rows to a table",
+  description: "Appends rows below the table in a tab of a Google Sheets spreadsheet (new rows are inserted, so nothing below is overwritten). range is the tab name, or the table's range such as 'Expenses'!A:D. Returns the rows written.",
+  input: {
+    spreadsheetId: spreadsheetIdInput,
+    range: rangeInput.describe("The tab name (appends below its table), or the table's range such as 'Expenses'!A:D."),
+    rows: valuesInput.describe("Rows of cell values to add (strings, numbers, booleans; null leaves a cell empty)."),
+    input: inputMode
+  },
+  risk: "write",
+  target: "/spreadsheetId",
+  async run(args, g) {
+    const id = spreadsheetIdOf(args.spreadsheetId);
+    const range2 = formatA1(parseA1(args.range));
+    checkValues(args.rows);
+    const res = await g.json("POST", `${SHEETS_BASE}/${enc(id)}/values/${enc(range2)}:append`, {
+      query: { valueInputOption: args.input, insertDataOption: "INSERT_ROWS" },
+      body: { majorDimension: "ROWS", values: args.rows }
+    });
+    const u = res.updates ?? {};
+    return {
+      text: `Appended ${plural(u.updatedRows ?? 0, "row")} at ${u.updatedRange ?? "(unknown range)"}${res.tableRange ? `, below the table at ${res.tableRange}` : ""}.`,
+      structured: { spreadsheetId: id, tableRange: res.tableRange ?? null, updatedRange: u.updatedRange ?? null, updatedRows: u.updatedRows ?? 0, updatedCells: u.updatedCells ?? 0 }
+    };
+  }
+});
+var create = tool({
+  name: "sheets_create",
+  title: "Create a spreadsheet",
+  description: "Creates a Google Sheets spreadsheet in the user's Drive (or in a folder), optionally naming its first tab and giving it a bold, frozen header row. Returns its id and URL.",
+  input: {
+    title: external_exports.string().min(1).max(500).describe("The spreadsheet's title."),
+    tabTitle: external_exports.string().min(1).max(100).optional().describe("The first tab's name (default: Sheets' own, Sheet1)."),
+    header: headerInput.optional().describe("Column headings for row 1 of the first tab, in bold."),
+    freezeHeader: external_exports.boolean().default(true).describe("Freeze the header row (default true; only with a header)."),
+    folderId: folderIdInput
+  },
+  risk: "write",
+  async run(args, g) {
+    const folder = folderIdOf(args.folderId);
+    const sheet = {};
+    const props = {};
+    if (args.tabTitle !== void 0) props.title = checkTabName(args.tabTitle);
+    if (args.header) {
+      props.gridProperties = { rowCount: 1e3, columnCount: Math.max(26, args.header.length), ...args.freezeHeader ? { frozenRowCount: 1 } : {} };
+      sheet.data = [{ startRow: 0, startColumn: 0, rowData: [headerRow(args.header)] }];
+    }
+    if (Object.keys(props).length) sheet.properties = props;
+    const body = { properties: { title: args.title } };
+    if (Object.keys(sheet).length) body.sheets = [sheet];
+    const res = await g.json("POST", SHEETS_BASE, { body });
+    const first = res.sheets?.[0]?.properties;
+    const url2 = res.spreadsheetUrl ?? spreadsheetUrl(res.spreadsheetId);
+    if (folder) {
+      try {
+        await moveIntoFolder(g, res.spreadsheetId, folder);
+      } catch (err) {
+        throw afterCreate(err, `Created the spreadsheet ${url2} (id ${res.spreadsheetId}) in My Drive`, "moving it into the folder failed: ");
+      }
+    }
+    return {
+      text: `Created "${res.properties?.title ?? args.title}"${folder ? ` in folder ${folder}` : ""}: ${url2}${first ? ` (first tab "${first.title}"${args.header ? `, header ${args.header.length} columns` : ""})` : ""}.`,
+      structured: { spreadsheetId: res.spreadsheetId, url: url2, title: res.properties?.title ?? args.title, folderId: folder ?? null, firstTab: first ? { title: first.title, tabId: first.sheetId } : null }
+    };
+  }
+});
+var addTab = tool({
+  name: "sheets_add_tab",
+  title: "Add a tab to a spreadsheet",
+  description: "Adds a tab to a Google Sheets spreadsheet, at a position (default: last), optionally with a bold, frozen header row. Returns its tab id.",
+  input: {
+    spreadsheetId: spreadsheetIdInput,
+    title: external_exports.string().min(1).max(100).describe("The new tab's name (unique in the spreadsheet)."),
+    position: external_exports.number().int().min(1).max(1e4).optional().describe("1-based position among the tabs (default: last)."),
+    rows: external_exports.number().int().min(1).max(MAX_ROW).optional().describe("Row count (default 1000)."),
+    columns: external_exports.number().int().min(1).max(MAX_COLUMN).optional().describe("Column count (default 26)."),
+    header: headerInput.optional().describe("Column headings for row 1, in bold."),
+    freezeHeader: external_exports.boolean().default(true).describe("Freeze the header row (default true; only with a header).")
+  },
+  risk: "write",
+  target: "/spreadsheetId",
+  async run(args, g) {
+    const id = spreadsheetIdOf(args.spreadsheetId);
+    const props = { title: checkTabName(args.title) };
+    if (args.position !== void 0) props.index = args.position - 1;
+    const grid = {};
+    if (args.rows !== void 0) grid.rowCount = args.rows;
+    if (args.columns !== void 0) grid.columnCount = args.columns;
+    const requests = [];
+    if (args.header) {
+      props.sheetId = randomInt(1, 2 ** 31 - 1);
+      if (args.header.length > (args.columns ?? 26)) grid.columnCount = args.header.length;
+      if (args.freezeHeader) grid.frozenRowCount = 1;
+    }
+    if (Object.keys(grid).length) props.gridProperties = grid;
+    requests.push({ addSheet: { properties: props } });
+    if (args.header) {
+      requests.push({
+        updateCells: { start: { sheetId: props.sheetId, rowIndex: 0, columnIndex: 0 }, rows: [headerRow(args.header)], fields: "userEnteredValue,userEnteredFormat.textFormat.bold" }
+      });
+    }
+    const res = await batchUpdate(g, id, requests);
+    const p = res.replies?.[0]?.addSheet?.properties ?? {};
+    return {
+      text: `Added tab "${p.title ?? args.title}" (tab id ${p.sheetId}) at position ${(p.index ?? 0) + 1}.`,
+      structured: { spreadsheetId: id, tab: { title: p.title ?? args.title, tabId: p.sheetId ?? null, position: (p.index ?? 0) + 1 } }
+    };
+  }
+});
+var NUMBER_FORMATS = ["TEXT", "NUMBER", "PERCENT", "CURRENCY", "DATE", "TIME", "DATE_TIME", "SCIENTIFIC"];
+var format = tool({
+  name: "sheets_format",
+  title: "Format cells in a spreadsheet",
+  description: "A small set of formatting for a range of a Google Sheets spreadsheet: bold, italic, a number format, column width, and frozen rows or columns (of the range's tab). Give at least one.",
+  input: {
+    spreadsheetId: spreadsheetIdInput,
+    range: rangeInput,
+    bold: external_exports.boolean().optional(),
+    italic: external_exports.boolean().optional(),
+    numberFormat: external_exports.object({
+      type: external_exports.enum(NUMBER_FORMATS),
+      pattern: external_exports.string().max(200).optional().describe(`A Sheets pattern such as "0.00", "#,##0", "yyyy-mm-dd" or "$#,##0.00"; omit for the locale's default.`)
+    }).optional(),
+    columnWidth: external_exports.number().int().min(1).max(2e3).optional().describe("Width in pixels of the range's columns."),
+    freezeRows: external_exports.number().int().min(0).max(1e3).optional().describe("Rows to freeze at the top of the tab (0 unfreezes)."),
+    freezeColumns: external_exports.number().int().min(0).max(100).optional().describe("Columns to freeze at the left of the tab (0 unfreezes).")
+  },
+  risk: "write",
+  target: "/spreadsheetId",
+  async run(args, g) {
+    const id = spreadsheetIdOf(args.spreadsheetId);
+    const a1 = parseA1(args.range);
+    const wantsCells = args.bold !== void 0 || args.italic !== void 0 || args.numberFormat !== void 0;
+    if (!wantsCells && args.columnWidth === void 0 && args.freezeRows === void 0 && args.freezeColumns === void 0) {
+      throw new InputError("Nothing to format: give bold, italic, numberFormat, columnWidth, freezeRows or freezeColumns.");
+    }
+    const tab = pickTab((await getMeta(g, id)).tabs, a1.sheet);
+    const requests = [];
+    const done = [];
+    if (wantsCells) {
+      const textFormat = {};
+      const fields = [];
+      if (args.bold !== void 0) {
+        textFormat.bold = args.bold;
+        fields.push("userEnteredFormat.textFormat.bold");
+        done.push(args.bold ? "bold" : "not bold");
+      }
+      if (args.italic !== void 0) {
+        textFormat.italic = args.italic;
+        fields.push("userEnteredFormat.textFormat.italic");
+        done.push(args.italic ? "italic" : "not italic");
+      }
+      const userEnteredFormat = {};
+      if (Object.keys(textFormat).length) userEnteredFormat.textFormat = textFormat;
+      if (args.numberFormat) {
+        userEnteredFormat.numberFormat = args.numberFormat.pattern ? { type: args.numberFormat.type, pattern: args.numberFormat.pattern } : { type: args.numberFormat.type };
+        fields.push("userEnteredFormat.numberFormat");
+        done.push(`number format ${args.numberFormat.type}${args.numberFormat.pattern ? ` "${args.numberFormat.pattern}"` : ""}`);
+      }
+      requests.push({ repeatCell: { range: gridRange(a1, tab.sheetId), cell: { userEnteredFormat }, fields: fields.join(",") } });
+    }
+    if (args.columnWidth !== void 0) {
+      const range2 = { sheetId: tab.sheetId, dimension: "COLUMNS", startIndex: (a1.startCol ?? 1) - 1 };
+      if (a1.endCol !== void 0) range2.endIndex = a1.endCol;
+      requests.push({ updateDimensionProperties: { range: range2, properties: { pixelSize: args.columnWidth }, fields: "pixelSize" } });
+      done.push(`column width ${args.columnWidth}px`);
+    }
+    if (args.freezeRows !== void 0 || args.freezeColumns !== void 0) {
+      const gp = {};
+      const fields = [];
+      if (args.freezeRows !== void 0) {
+        gp.frozenRowCount = args.freezeRows;
+        fields.push("gridProperties.frozenRowCount");
+        done.push(`${plural(args.freezeRows, "frozen row")}`);
+      }
+      if (args.freezeColumns !== void 0) {
+        gp.frozenColumnCount = args.freezeColumns;
+        fields.push("gridProperties.frozenColumnCount");
+        done.push(`${plural(args.freezeColumns, "frozen column")}`);
+      }
+      requests.push({ updateSheetProperties: { properties: { sheetId: tab.sheetId, gridProperties: gp }, fields: fields.join(",") } });
+    }
+    await batchUpdate(g, id, requests);
+    const where = formatA1({ ...a1, sheet: tab.title });
+    return { text: `Formatted ${where}: ${done.join(", ")}.`, structured: { spreadsheetId: id, range: where, tabId: tab.sheetId, applied: done } };
+  }
+});
+var clear = tool({
+  name: "sheets_clear",
+  title: "Clear cells in a spreadsheet",
+  description: "Clears the values in a range (or a whole tab) of a Google Sheets spreadsheet. Formatting stays. This can't be undone from here (only through the spreadsheet's version history).",
+  input: { spreadsheetId: spreadsheetIdInput, range: rangeInput },
+  risk: "risky",
+  target: "/spreadsheetId",
+  async run(args, g) {
+    const id = spreadsheetIdOf(args.spreadsheetId);
+    const range2 = formatA1(parseA1(args.range));
+    const res = await g.json("POST", `${SHEETS_BASE}/${enc(id)}/values/${enc(range2)}:clear`, { body: {} });
+    return { text: `Cleared ${res.clearedRange ?? range2}.`, structured: { spreadsheetId: id, clearedRange: res.clearedRange ?? range2 } };
+  }
+});
+var deleteTab = tool({
+  name: "sheets_delete_tab",
+  title: "Delete a tab from a spreadsheet",
+  description: "Deletes a tab, and everything on it, from a Google Sheets spreadsheet. A spreadsheet's only tab can't be deleted.",
+  input: { spreadsheetId: spreadsheetIdInput, tab: external_exports.string().min(1).max(100).describe("The tab's name.") },
+  risk: "risky",
+  target: "/spreadsheetId",
+  async run(args, g) {
+    const id = spreadsheetIdOf(args.spreadsheetId);
+    const tabs = (await getMeta(g, id)).tabs;
+    const tab = pickTab(tabs, args.tab);
+    if (tabs.length === 1) throw new InputError(`"${tab.title}" is the spreadsheet's only tab, and a spreadsheet must keep one.`);
+    await batchUpdate(g, id, [{ deleteSheet: { sheetId: tab.sheetId } }]);
+    return { text: `Deleted tab "${tab.title}" (tab id ${tab.sheetId}).`, structured: { spreadsheetId: id, deleted: { title: tab.title, tabId: tab.sheetId } } };
+  }
+});
+var sheetsTools = [listTabs, read, write, appendRows, create, addTab, format, clear, deleteTab];
 
 // extensions/google-workspace/src/slides.ts
-var slidesTools = [];
+import { randomBytes as randomBytes2 } from "node:crypto";
+var SLIDES_BASE = `${SLIDES}/presentations`;
+var DRIVE_FILES_BASE = `${DRIVE}/files`;
+var EMU_PER_PT = 12700;
+var MAX_READ_CHARS = 1e5;
+var enc2 = encodeURIComponent;
+function presentationIdOf(input2) {
+  return fileId(input2, "presentation id");
+}
+function driveFileIdOf(input2) {
+  return fileId(input2, "Drive file id");
+}
+var EXISTING_ID = /^[A-Za-z0-9_][A-Za-z0-9_\-:]{0,49}$/;
+function objectIdOf(input2, what) {
+  const s = input2.trim();
+  if (!EXISTING_ID.test(s)) throw new InputError(`${what} must be a slide object id as slides_read lists it (letters, digits, _ - :, at most 50).`);
+  return s;
+}
+function newObjectId(kind) {
+  return `xaq_${kind}_${randomBytes2(6).toString("hex")}`;
+}
+function deckUrl(id) {
+  return `https://docs.google.com/presentation/d/${enc2(id)}/edit`;
+}
+async function getDeck(g, id, fields) {
+  return g.json("GET", `${SLIDES_BASE}/${enc2(id)}`, { query: { fields } });
+}
+async function batchUpdate2(g, id, requests) {
+  return g.json("POST", `${SLIDES_BASE}/${enc2(id)}:batchUpdate`, { body: { requests } });
+}
+function slideIndex(deck, slideId) {
+  const ids = (deck.slides ?? []).map((s) => s.objectId);
+  const i = ids.indexOf(slideId);
+  if (i < 0) throw new InputError(`There's no slide ${slideId} in the deck. Its slides are: ${ids.join(", ") || "(none)"}.`);
+  return i;
+}
+function textLines(text) {
+  const paras = [];
+  let cur = null;
+  for (const el of text?.textElements ?? []) {
+    if (el.paragraphMarker) {
+      cur = { bullet: el.paragraphMarker.bullet ? el.paragraphMarker.bullet.nestingLevel ?? 0 : void 0, text: "" };
+      paras.push(cur);
+      continue;
+    }
+    const s = el.textRun?.content ?? el.autoText?.content;
+    if (s === void 0) continue;
+    if (!cur) {
+      cur = { text: "" };
+      paras.push(cur);
+    }
+    cur.text += s;
+  }
+  return paras.map((p) => ({ ...p, text: p.text.replace(/\n$/, "").replace(/\u000b/g, "\n") })).filter((p) => p.text.trim() !== "").map((p) => p.bullet !== void 0 ? `${"  ".repeat(p.bullet)}- ${p.text}` : p.text);
+}
+var TITLE_TYPES = /* @__PURE__ */ new Set(["TITLE", "CENTERED_TITLE"]);
+function collect(elements, out) {
+  for (const el of elements ?? []) {
+    if (el.shape) {
+      const lines = textLines(el.shape.text);
+      if (TITLE_TYPES.has(el.shape.placeholder?.type ?? "") && !out.title) out.title = lines.join(" ");
+      else out.body.push(...lines);
+    } else if (el.table) {
+      for (const r of el.table.tableRows ?? []) {
+        const cells = (r.tableCells ?? []).map((c) => textLines(c.text).join(" "));
+        if (cells.some((c) => c !== "")) out.body.push(`| ${cells.join(" | ")} |`);
+      }
+    } else if (el.elementGroup) {
+      collect(el.elementGroup.children, out);
+    } else if (el.image) {
+      out.images++;
+    } else if (el.sheetsChart) {
+      out.body.push("[chart]");
+    } else if (el.video) {
+      out.body.push("[video]");
+    } else if (el.wordArt?.renderedText) {
+      out.body.push(el.wordArt.renderedText);
+    }
+  }
+}
+function speakerNotes(slide) {
+  const notes = slide.slideProperties?.notesPage;
+  const id = notes?.notesProperties?.speakerNotesObjectId;
+  if (!notes || !id) return "";
+  const shape = (notes.pageElements ?? []).find((e) => e.objectId === id)?.shape;
+  return textLines(shape?.text).join("\n");
+}
+function speakerNotesId(slide) {
+  return slide.slideProperties?.notesPage?.notesProperties?.speakerNotesObjectId;
+}
+function cleanLine(s) {
+  return s.replace(/\r\n?|\n|\u000b/g, " ").replace(/[\u0000-\u0008\u000c-\u001f\u007f]/g, "").trim();
+}
+function cleanBullet(s) {
+  const tabs = /^\t*/.exec(s)?.[0] ?? "";
+  return tabs + cleanLine(s.slice(tabs.length).replace(/\t/g, " "));
+}
+function outlineSlideRequests(item, ids, insertionIndex) {
+  const createSlide = { objectId: ids.slide };
+  if (insertionIndex !== void 0) createSlide.insertionIndex = insertionIndex;
+  createSlide.slideLayoutReference = { predefinedLayout: "TITLE_AND_BODY" };
+  createSlide.placeholderIdMappings = [
+    { layoutPlaceholder: { type: "TITLE", index: 0 }, objectId: ids.title },
+    { layoutPlaceholder: { type: "BODY", index: 0 }, objectId: ids.body }
+  ];
+  const requests = [{ createSlide }];
+  const title = cleanLine(item.title);
+  if (title) requests.push({ insertText: { objectId: ids.title, insertionIndex: 0, text: title } });
+  const bullets = (item.bullets ?? []).map(cleanBullet).filter((b) => b.replace(/^\t*/, "") !== "");
+  if (bullets.length) {
+    requests.push({ insertText: { objectId: ids.body, insertionIndex: 0, text: bullets.join("\n") } });
+    requests.push({ createParagraphBullets: { objectId: ids.body, textRange: { type: "ALL" }, bulletPreset: "BULLET_DISC_CIRCLE_SQUARE" } });
+  }
+  return requests;
+}
+var NO_LAYOUT = `This deck's theme has no "Title and body" layout, which outline slides are built on. Instead, copy a slide that has the layout you want with slides_duplicate_slide and change its text with slides_replace_text.`;
+function layoutError(err) {
+  const e = err;
+  return e?.status === 400 && /layout/i.test(e.message ?? "") ? new InputError(NO_LAYOUT) : err;
+}
+function outlineIds() {
+  const slide = newObjectId("slide");
+  return { slide, title: `${slide}_title`, body: `${slide}_body` };
+}
+function cleanNotes(s) {
+  return s.replace(/\r\n?/g, "\n").replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, "").trim();
+}
+async function fillNotes(g, id, wanted) {
+  const todo = wanted.map((w) => ({ ...w, notes: cleanNotes(w.notes) })).filter((w) => w.notes !== "");
+  if (todo.length === 0) return 0;
+  const deck = await getDeck(g, id, "slides(objectId,slideProperties.notesPage.notesProperties)");
+  const byId = new Map((deck.slides ?? []).map((s) => [s.objectId, speakerNotesId(s)]));
+  const requests = [];
+  for (const w of todo) {
+    const shapeId = byId.get(w.slideId);
+    if (!shapeId) throw new InputError(`slide ${w.slideId} has no speaker notes box to write into`);
+    requests.push({ insertText: { objectId: shapeId, insertionIndex: 0, text: w.notes } });
+  }
+  await batchUpdate2(g, id, requests);
+  return requests.length;
+}
+function checkImageUrl(raw) {
+  const s = raw.trim();
+  if (s.length > 2048) throw new InputError("The image URL is longer than the 2 KB Google accepts.");
+  let u;
+  try {
+    u = new URL(s);
+  } catch {
+    throw new InputError("imageUrl isn't a URL.");
+  }
+  if (u.protocol !== "https:") throw new InputError("imageUrl must be an https:// URL.");
+  if (u.username || u.password) throw new InputError("imageUrl can't carry a user name or password.");
+  if (!u.hostname.includes(".") || u.hostname === "localhost" || u.hostname.endsWith(".localhost")) {
+    throw new InputError("imageUrl must be a public https URL: Google's servers fetch it.");
+  }
+  return u.href;
+}
+function placementBox(placement, pageW, pageH) {
+  const m = Math.round(pageW * 0.05);
+  switch (placement) {
+    case "full":
+      return { x: 0, y: 0, width: pageW, height: pageH };
+    case "left":
+    case "right": {
+      const width = Math.round(pageW / 2 - 1.5 * m);
+      const height = Math.round(pageH * 0.7);
+      const y = Math.round((pageH - height) / 2);
+      return { x: placement === "left" ? m : Math.round(pageW / 2 + m / 2), y, width, height };
+    }
+    default: {
+      const width = Math.round(pageW * 0.6);
+      const height = Math.round(pageH * 0.6);
+      return { x: Math.round((pageW - width) / 2), y: Math.round((pageH - height) / 2), width, height };
+    }
+  }
+}
+function toPt(d, fallback) {
+  if (!d || typeof d.magnitude !== "number") return fallback;
+  return d.unit === "PT" ? d.magnitude : d.magnitude / EMU_PER_PT;
+}
+function createImageRequest(objectId, url2, slideId, box) {
+  return {
+    createImage: {
+      objectId,
+      url: url2,
+      elementProperties: {
+        pageObjectId: slideId,
+        size: { width: { magnitude: box.width, unit: "PT" }, height: { magnitude: box.height, unit: "PT" } },
+        transform: { scaleX: 1, scaleY: 1, shearX: 0, shearY: 0, translateX: box.x, translateY: box.y, unit: "PT" }
+      }
+    }
+  };
+}
+var IMAGE_TYPES = /* @__PURE__ */ new Set(["image/png", "image/jpeg", "image/gif"]);
+var NOT_PUBLIC = `This image isn't shared publicly, and Slides can only insert public images (Google fetches them without signing in). Use an https imageUrl, or share the file as "anyone with the link" in Google Drive yourself: this extension never changes sharing.`;
+var DRIVE_LINK_HOSTS = /* @__PURE__ */ new Set(["drive.google.com", "drive.usercontent.google.com"]);
+async function driveImageUrl(g, fileId2) {
+  const f = await g.json("GET", `${DRIVE_FILES_BASE}/${enc2(fileId2)}`, {
+    query: { fields: "id,name,mimeType,size,resourceKey,webContentLink,permissions(type,role)", supportsAllDrives: true }
+  });
+  const name = f.name ?? fileId2;
+  if (!f.mimeType || !IMAGE_TYPES.has(f.mimeType)) throw new InputError(`"${name}" is ${f.mimeType ?? "of an unknown type"}; Slides takes PNG, JPEG or GIF images.`);
+  if (f.size !== void 0 && Number(f.size) >= 50 * 1024 * 1024) throw new InputError(`"${name}" is over the 50 MB Slides accepts.`);
+  if (f.permissions && !f.permissions.some((p) => p.type === "anyone")) throw new InputError(NOT_PUBLIC);
+  let link = null;
+  if (f.webContentLink) {
+    try {
+      link = new URL(f.webContentLink);
+    } catch {
+      link = null;
+    }
+    if (link && (link.protocol !== "https:" || !DRIVE_LINK_HOSTS.has(link.hostname) || link.username || link.password || link.port)) {
+      throw new InputError(`Drive returned an unexpected download link for "${name}".`);
+    }
+  }
+  if (!link) link = new URL(`https://drive.google.com/uc?export=download&id=${enc2(f.id ?? fileId2)}`);
+  if (f.resourceKey && !link.searchParams.has("resourcekey")) link.searchParams.set("resourcekey", f.resourceKey);
+  return { url: link.href, name };
+}
+function imageError(err, fromDrive) {
+  const e = err;
+  if (e?.status === 400 && /publicly accessible|retriev/i.test(e.message ?? "")) {
+    return new InputError(
+      fromDrive ? NOT_PUBLIC : "Google couldn't fetch that image. The URL must be public (no sign-in or cookies), and the image PNG, JPEG or GIF, under 50 MB and 25 megapixels."
+    );
+  }
+  return err;
+}
+var presentationIdInput = external_exports.string().min(1).max(500).describe("The presentation's id (the part after /d/ in its URL) or its docs.google.com URL.");
+var slideIdInput = external_exports.string().min(1).max(50).describe("The slide's object id, as slides_read lists it.");
+var bulletsInput = external_exports.array(external_exports.string().max(2e3)).max(50).optional().describe('Bullet points for the body. Start one with a tab per level to nest it ("\\tsub-point").');
+var notesInput = external_exports.string().max(2e4).optional().describe("Speaker notes.");
+var outlineSlide = external_exports.object({ title: external_exports.string().max(500).describe("The slide's title."), bullets: bulletsInput, notes: notesInput });
+function plural2(n, word) {
+  return `${n} ${word}${n === 1 ? "" : "s"}`;
+}
+var READ_FIELDS = "presentationId,title,revisionId,slides(objectId,pageElements,slideProperties.notesPage(notesProperties,pageElements))";
+var read2 = tool({
+  name: "slides_read",
+  title: "Read a slide deck",
+  description: "Reads a Google Slides deck: each slide's object id, title, body text (bullets, text boxes, tables) and speaker notes. Optionally only some slides.",
+  input: {
+    presentationId: presentationIdInput,
+    slideIds: external_exports.array(external_exports.string().min(1).max(50)).max(500).optional().describe("Only these slides (object ids)."),
+    includeNotes: external_exports.boolean().default(true).describe("Include speaker notes (default true).")
+  },
+  risk: "read",
+  target: "/presentationId",
+  async run(args, g) {
+    const id = presentationIdOf(args.presentationId);
+    const deck = await getDeck(g, id, READ_FIELDS);
+    const all = deck.slides ?? [];
+    const wanted = args.slideIds?.map((s) => objectIdOf(s, "slideIds"));
+    if (wanted) for (const w of wanted) slideIndex(deck, w);
+    const out = [];
+    const lines = [`# ${deck.title || "(untitled)"}`, `${plural2(all.length, "slide")} · ${deckUrl(id)}`];
+    let chars = 0;
+    let truncated = false;
+    for (const [i, slide] of all.entries()) {
+      if (wanted && !wanted.includes(slide.objectId)) continue;
+      const t = { title: "", body: [], images: 0 };
+      collect(slide.pageElements, t);
+      const notes = args.includeNotes ? speakerNotes(slide) : "";
+      const block = [``, `## Slide ${i + 1}: ${t.title || "(no title)"} [id ${slide.objectId}]`, ...t.body];
+      if (t.images) block.push(`(${plural2(t.images, "image")})`);
+      if (notes) block.push(`Notes: ${notes}`);
+      const size = block.join("\n").length;
+      if (chars + size > MAX_READ_CHARS && out.length > 0) {
+        truncated = true;
+        break;
+      }
+      chars += size;
+      lines.push(...block);
+      const entry = { position: i + 1, slideId: slide.objectId, title: t.title, body: t.body, images: t.images };
+      if (args.includeNotes) entry.notes = notes;
+      out.push(entry);
+    }
+    if (truncated) lines.push("", `Stopped after ${plural2(out.length, "slide")} (the text is long): pass slideIds to read the rest.`);
+    return { text: lines.join("\n"), structured: { presentationId: id, title: deck.title ?? "", url: deckUrl(id), slideCount: all.length, slides: out, truncated } };
+  }
+});
+var create2 = tool({
+  name: "slides_create",
+  title: "Create a slide deck from an outline",
+  description: "Creates a Google Slides deck in the user's Drive (or in a folder) from an outline: a title slide (the deck title, optional subtitle), then one Title-and-body slide per outline item, with its bullets and speaker notes. Returns the deck's id, URL and slide ids.",
+  input: {
+    title: external_exports.string().min(1).max(500).describe("The deck's title (also on the title slide)."),
+    subtitle: external_exports.string().max(500).optional().describe("The title slide's subtitle."),
+    slides: external_exports.array(outlineSlide).max(100).describe("The outline: one { title, bullets?, notes? } per slide."),
+    titleSlide: external_exports.boolean().default(true).describe("Keep a title slide first (default true)."),
+    folderId: folderIdInput
+  },
+  risk: "write",
+  async run(args, g) {
+    if (!args.titleSlide && args.slides.length === 0) throw new InputError("Give at least one slide, or keep the title slide.");
+    const folder = folderIdOf(args.folderId);
+    const created = await g.json("POST", SLIDES_BASE, { body: { title: args.title } });
+    const id = created.presentationId;
+    const url2 = deckUrl(id);
+    const made = [];
+    if (folder) {
+      try {
+        await moveIntoFolder(g, id, folder);
+      } catch (err) {
+        throw afterCreate(err, `Created the deck ${url2} (id ${id}) in My Drive, still empty`, "moving it into the folder failed: ");
+      }
+    }
+    try {
+      const requests = [];
+      const first = created.slides?.[0];
+      if (first && args.titleSlide) {
+        const shapes = first.pageElements ?? [];
+        const titleBox = shapes.find((e) => TITLE_TYPES.has(e.shape?.placeholder?.type ?? ""));
+        const subBox = shapes.find((e) => e.shape?.placeholder?.type === "SUBTITLE");
+        const title = cleanLine(args.title);
+        if (titleBox && title) requests.push({ insertText: { objectId: titleBox.objectId, insertionIndex: 0, text: title } });
+        const subtitle = cleanLine(args.subtitle ?? "");
+        if (subBox && subtitle) requests.push({ insertText: { objectId: subBox.objectId, insertionIndex: 0, text: subtitle } });
+        made.push({ position: 1, slideId: first.objectId, title });
+      }
+      const notes = [];
+      for (const item of args.slides) {
+        const ids = outlineIds();
+        requests.push(...outlineSlideRequests(item, ids));
+        made.push({ position: made.length + 1, slideId: ids.slide, title: cleanLine(item.title) });
+        if (item.notes) notes.push({ slideId: ids.slide, notes: item.notes });
+      }
+      if (first && !args.titleSlide) requests.push({ deleteObject: { objectId: first.objectId } });
+      if (requests.length) await batchUpdate2(g, id, requests).catch((err) => Promise.reject(layoutError(err)));
+      await fillNotes(g, id, notes);
+    } catch (err) {
+      throw afterCreate(err, `Created the deck ${url2} (id ${id})${folder ? ` in folder ${folder}` : ""}`, "filling it in failed: ");
+    }
+    return {
+      text: [`Created "${args.title}"${folder ? ` in folder ${folder}` : ""} with ${plural2(made.length, "slide")}: ${url2}`, ...made.map((m) => `${m.position}. ${m.title || "(no title)"} [id ${m.slideId}]`)].join("\n"),
+      structured: { presentationId: id, url: url2, title: args.title, folderId: folder ?? null, slides: made }
+    };
+  }
+});
+var addSlide = tool({
+  name: "slides_add_slide",
+  title: "Add a slide to a deck",
+  description: "Adds a Title-and-body slide to a Google Slides deck from one outline item (title, bullets, speaker notes), at a 1-based position (default: last). Returns its slide id.",
+  input: {
+    presentationId: presentationIdInput,
+    title: external_exports.string().max(500).describe("The slide's title."),
+    bullets: bulletsInput,
+    notes: notesInput,
+    position: external_exports.number().int().min(1).max(1e4).optional().describe("1-based position (default: after the last slide).")
+  },
+  risk: "write",
+  target: "/presentationId",
+  async run(args, g) {
+    const id = presentationIdOf(args.presentationId);
+    const deck = await getDeck(g, id, "presentationId,slides.objectId");
+    const count = deck.slides?.length ?? 0;
+    if (args.position !== void 0 && args.position > count + 1) throw new InputError(`The deck has ${plural2(count, "slide")}, so position can be 1 to ${count + 1}.`);
+    const ids = outlineIds();
+    await batchUpdate2(g, id, outlineSlideRequests(args, ids, args.position === void 0 ? void 0 : args.position - 1)).catch((err) => Promise.reject(layoutError(err)));
+    if (args.notes) await fillNotes(g, id, [{ slideId: ids.slide, notes: args.notes }]);
+    const position = args.position ?? count + 1;
+    return { text: `Added slide ${position} "${cleanLine(args.title) || "(no title)"}" [id ${ids.slide}].`, structured: { presentationId: id, slideId: ids.slide, position } };
+  }
+});
+var duplicateSlide = tool({
+  name: "slides_duplicate_slide",
+  title: "Duplicate a slide",
+  description: "Duplicates a slide of a Google Slides deck. The copy goes right after the original, or at a 1-based position. Returns the copy's slide id.",
+  input: {
+    presentationId: presentationIdInput,
+    slideId: slideIdInput,
+    position: external_exports.number().int().min(1).max(1e4).optional().describe("1-based position for the copy (default: right after the original).")
+  },
+  risk: "write",
+  target: "/presentationId",
+  async run(args, g) {
+    const id = presentationIdOf(args.presentationId);
+    const slideId = objectIdOf(args.slideId, "slideId");
+    const deck = await getDeck(g, id, "presentationId,slides.objectId");
+    const from = slideIndex(deck, slideId);
+    const total = (deck.slides?.length ?? 0) + 1;
+    if (args.position !== void 0 && args.position > total) throw new InputError(`With the copy the deck has ${plural2(total, "slide")}, so position can be 1 to ${total}.`);
+    const copy = newObjectId("copy");
+    const requests = [{ duplicateObject: { objectId: slideId, objectIds: { [slideId]: copy } } }];
+    const landed = from + 1;
+    const target = args.position === void 0 ? landed : args.position - 1;
+    if (target !== landed) {
+      requests.push({ updateSlidesPosition: { slideObjectIds: [copy], insertionIndex: target < landed ? target : target + 1 } });
+    }
+    await batchUpdate2(g, id, requests);
+    return { text: `Duplicated slide ${from + 1} [id ${slideId}] as slide ${target + 1} [id ${copy}].`, structured: { presentationId: id, sourceSlideId: slideId, slideId: copy, position: target + 1 } };
+  }
+});
+var deleteSlide = tool({
+  name: "slides_delete_slide",
+  title: "Delete a slide",
+  description: "Deletes a slide, with everything on it and its speaker notes, from a Google Slides deck. Only the deck's version history can bring it back.",
+  input: { presentationId: presentationIdInput, slideId: slideIdInput },
+  risk: "risky",
+  target: "/presentationId",
+  async run(args, g) {
+    const id = presentationIdOf(args.presentationId);
+    const slideId = objectIdOf(args.slideId, "slideId");
+    const deck = await getDeck(g, id, READ_FIELDS);
+    const i = slideIndex(deck, slideId);
+    const t = { title: "", body: [], images: 0 };
+    collect(deck.slides?.[i]?.pageElements, t);
+    await batchUpdate2(g, id, [{ deleteObject: { objectId: slideId } }]);
+    const remaining = (deck.slides?.length ?? 1) - 1;
+    return {
+      text: `Deleted slide ${i + 1} "${t.title || "(no title)"}" [id ${slideId}]; ${plural2(remaining, "slide")} left.`,
+      structured: { presentationId: id, deleted: { slideId, position: i + 1, title: t.title }, remaining }
+    };
+  }
+});
+var replaceText = tool({
+  name: "slides_replace_text",
+  title: "Find and replace text in a deck",
+  description: "Replaces every occurrence of some text in a Google Slides deck (shapes and tables), or only on the given slides. Returns how many occurrences changed.",
+  input: {
+    presentationId: presentationIdInput,
+    find: external_exports.string().min(1).max(1e3).describe("The text to find."),
+    replace: external_exports.string().max(1e4).describe('Its replacement ("" removes it).'),
+    matchCase: external_exports.boolean().default(true).describe("Case-sensitive (default true)."),
+    slideIds: external_exports.array(external_exports.string().min(1).max(50)).max(500).optional().describe("Only on these slides (object ids); default: the whole deck.")
+  },
+  risk: "write",
+  target: "/presentationId",
+  async run(args, g) {
+    const id = presentationIdOf(args.presentationId);
+    const req = { containsText: { text: args.find, matchCase: args.matchCase }, replaceText: args.replace };
+    const pages = args.slideIds?.map((s) => objectIdOf(s, "slideIds"));
+    if (pages && pages.length) req.pageObjectIds = pages;
+    const res = await batchUpdate2(g, id, [{ replaceAllText: req }]);
+    const n = Number(res.replies?.[0]?.replaceAllText?.occurrencesChanged ?? 0);
+    const scope = pages && pages.length ? `on ${plural2(pages.length, "slide")}` : "in the deck";
+    return { text: n ? `Replaced ${plural2(n, "occurrence")} of "${args.find}" ${scope}.` : `No occurrences of "${args.find}" ${scope}; nothing changed.`, structured: { presentationId: id, occurrencesChanged: n } };
+  }
+});
+var insertImage = tool({
+  name: "slides_insert_image",
+  title: "Insert an image on a slide",
+  description: `Puts an image on a slide of a Google Slides deck, from a public https URL or a Drive file id. Google's servers fetch the image (the extension never does), once, at insertion: a URL must be publicly reachable, and the image PNG, JPEG or GIF, under 50 MB and 25 megapixels. A Drive file works only if it's shared as "anyone with the link" (the extension never changes sharing; a private file is refused). No local files. The image becomes part of the deck, visible to everyone the deck is shared with. Placement: center (default), full, left or right half, or an explicit box in points; the image keeps its aspect ratio inside the box.`,
+  input: {
+    presentationId: presentationIdInput,
+    slideId: slideIdInput,
+    imageUrl: external_exports.string().min(1).max(2048).optional().describe("A public https:// image URL (Google fetches it)."),
+    driveFileId: external_exports.string().min(1).max(500).optional().describe(`A Drive image's file id or link; the file must be shared as "anyone with the link".`),
+    placement: external_exports.enum(["center", "full", "left", "right"]).default("center"),
+    box: external_exports.object({ x: external_exports.number().min(-1e4).max(1e4), y: external_exports.number().min(-1e4).max(1e4), width: external_exports.number().min(1).max(1e4), height: external_exports.number().min(1).max(1e4) }).optional().describe("An explicit box in points from the slide's top-left (a default slide is 720 × 405 pt); overrides placement.")
+  },
+  risk: "write",
+  target: "/presentationId",
+  async run(args, g) {
+    const id = presentationIdOf(args.presentationId);
+    const slideId = objectIdOf(args.slideId, "slideId");
+    if (args.imageUrl === void 0 === (args.driveFileId === void 0)) throw new InputError("Give exactly one of imageUrl and driveFileId.");
+    const url2 = args.imageUrl !== void 0 ? checkImageUrl(args.imageUrl) : void 0;
+    const fileId2 = args.driveFileId !== void 0 ? driveFileIdOf(args.driveFileId) : void 0;
+    const deck = await getDeck(g, id, "presentationId,pageSize,slides.objectId");
+    const i = slideIndex(deck, slideId);
+    const source = url2 !== void 0 ? { url: url2, name: url2 } : await driveImageUrl(g, fileId2);
+    const pageW = toPt(deck.pageSize?.width, 720);
+    const pageH = toPt(deck.pageSize?.height, 405);
+    const box = args.box ?? placementBox(args.placement, pageW, pageH);
+    const objectId = newObjectId("img");
+    let res;
+    try {
+      res = await batchUpdate2(g, id, [createImageRequest(objectId, source.url, slideId, box)]);
+    } catch (err) {
+      throw imageError(err, fileId2 !== void 0);
+    }
+    const made = res.replies?.[0]?.createImage?.objectId ?? objectId;
+    return {
+      text: `Inserted ${fileId2 ? `Drive image "${source.name}"` : "the image"} on slide ${i + 1} [id ${slideId}] at ${box.x},${box.y} pt, ${box.width} × ${box.height} pt [image id ${made}].`,
+      structured: { presentationId: id, slideId, imageId: made, box, source: fileId2 ? { driveFileId: fileId2 } : { imageUrl: url2 } }
+    };
+  }
+});
+var slidesTools = [read2, create2, addSlide, duplicateSlide, deleteSlide, replaceText, insertImage];
 
 // extensions/google-workspace/src/registry.ts
 var allTools = [...driveTools, ...docsTools, ...sheetsTools, ...slidesTools];
