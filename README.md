@@ -30,6 +30,7 @@ integrity, so xaq doesn't offer it as an update. `.gitattributes` may not use `e
 
 | Name | Kind | What |
 | --- | --- | --- |
+| [exa](extensions/exa/) | remote | Exa web search: agents search the web and read pages, with your own Exa API key. |
 | [google-workspace](extensions/google-workspace/) | code | Google Docs, Sheets and Slides, plus Drive to find, export and upload files. |
 | [whoop](extensions/whoop/) | code | WHOOP recovery, sleep, strain and workouts with the WHOOP dashboard's trends and insights, read live. |
 

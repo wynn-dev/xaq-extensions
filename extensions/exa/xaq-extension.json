@@ -1,0 +1,37 @@
+{
+  "schema": 1,
+  "name": "exa",
+  "displayName": "Exa",
+  "version": "1.0.0",
+  "description": "Exa's hosted MCP server: agents search the web and read pages as clean text, with your own Exa API key.",
+  "kind": "remote",
+  "slug": "exa",
+  "remote": {
+    "url": "https://mcp.exa.ai/mcp",
+    "auth": { "type": "header", "headerName": "x-api-key" }
+  },
+  "setup": [
+    {
+      "id": "key",
+      "title": "Create an Exa API key",
+      "body": "Sign in to the Exa dashboard, open API Keys and create a key just for xaq (any name, for example xaq). Copy it: you paste it here next.",
+      "link": { "label": "Open Exa's API keys", "url": "https://dashboard.exa.ai/api-keys" }
+    },
+    {
+      "id": "paste",
+      "title": "Paste the key",
+      "body": "Paste the key as the API key. xaq stores it encrypted and sends it as the `x-api-key` header on every request to Exa. Searches count against your Exa account's credits."
+    },
+    {
+      "id": "access",
+      "title": "What agents can do",
+      "body": "Two tools, both read only: `web_search_exa` searches the web and returns each result's title, URL and text, and `web_fetch_exa` reads pages at URLs the agent gives it. Neither changes anything, but what an agent searches for or fetches is sent to Exa."
+    }
+  ],
+  "risk": {
+    "tools": {
+      "web_search_exa": { "class": "read" },
+      "web_fetch_exa": { "class": "read" }
+    }
+  }
+}
