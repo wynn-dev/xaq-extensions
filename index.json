@@ -8,8 +8,18 @@
       "kind": "remote",
       "version": "1.0.0",
       "path": "extensions/brightspace",
-      "commit": "3249eee3c8cf0f5035893389470bb0f503435909",
+      "commit": "cc984d1e7c15981a76e40618d3fc1901318ed12d",
       "integrity": "sha256-HuvzSso1Q2ZdClv41ZxtrhcSEjfUjtg5cKEr7KVtsOQ="
+    },
+    {
+      "name": "exa",
+      "displayName": "Exa",
+      "description": "Exa's hosted MCP server: agents search the web and read pages as clean text, with your own Exa API key.",
+      "kind": "remote",
+      "version": "1.0.0",
+      "path": "extensions/exa",
+      "commit": "cc984d1e7c15981a76e40618d3fc1901318ed12d",
+      "integrity": "sha256-gnFYEAeUZtRddxyhegdL5LWRgJO5jH7j2k/nfeNbkzU="
     },
     {
       "name": "google-workspace",
@@ -18,7 +28,7 @@
       "kind": "code",
       "version": "1.0.0",
       "path": "extensions/google-workspace",
-      "commit": "3249eee3c8cf0f5035893389470bb0f503435909",
+      "commit": "cc984d1e7c15981a76e40618d3fc1901318ed12d",
       "integrity": "sha256-sbiN4dC5yOa3WoI8kd+Y9QzT48QoWmCN+csnBh0igZE="
     },
     {
@@ -28,7 +38,7 @@
       "kind": "remote",
       "version": "1.0.0",
       "path": "extensions/notion",
-      "commit": "3249eee3c8cf0f5035893389470bb0f503435909",
+      "commit": "cc984d1e7c15981a76e40618d3fc1901318ed12d",
       "integrity": "sha256-TwzJEkAqqLv41DlxDVOghtHxvLC9KldLAsXxEXNqCFU="
     },
     {
@@ -38,7 +48,7 @@
       "kind": "remote",
       "version": "1.0.0",
       "path": "extensions/t3code",
-      "commit": "3249eee3c8cf0f5035893389470bb0f503435909",
+      "commit": "cc984d1e7c15981a76e40618d3fc1901318ed12d",
       "integrity": "sha256-uqf721cij+o3eWwqJov4QU2xNx0POX0kaSJWYJz43As="
     },
     {
@@ -48,7 +58,7 @@
       "kind": "code",
       "version": "1.0.0",
       "path": "extensions/whoop",
-      "commit": "3249eee3c8cf0f5035893389470bb0f503435909",
+      "commit": "cc984d1e7c15981a76e40618d3fc1901318ed12d",
       "integrity": "sha256-MR1Ctu/r85Smg5NKRgmnEyb+xX8L3BLzHIKHI98Twng="
     }
   ]
